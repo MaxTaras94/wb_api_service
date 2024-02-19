@@ -1,8 +1,9 @@
 CREATE TABLE Users (
     telegram_id BigInt PRIMARY KEY,
 	username VARCHAR(50),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    is_admin BOOLEAN DEFAULT true;
+	is_admin BOOLEAN DEFAULT true,
+	source VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;    
 );
 
 CREATE TABLE WB_api_keys (

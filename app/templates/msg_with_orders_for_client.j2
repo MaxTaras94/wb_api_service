@@ -1,15 +1,15 @@
 🕛 <b>{{data['date_and_time_order']}}</b><br>
-{% if data['name_key'] is none %}
+{% if data['name_key']|safe is none %}
 🔑 Данные для API ключа: <b>{{data['api_key'][:10]+"..."+data['api_key'][-10:]}}</b><br>
 {% else %}
-🔑 Данные для API ключа: <b>{{data['name_key']}}</b><br>	
+🔑 Данные для API ключа: <b>{{data['name_key']|safe}}</b><br>	
 {% endif %}
 🛒 <b>Заказ 📦</b> [{{data['total_count_orders_today']}}]: <b>{{data['finishedPrice']}}₽</b><br>
 🛍️ WB скидка: {{data['spp_sum']}}₽ ({{data['spp_percent']}}%)<br>
 📈 Сегодня всего: <b>{{data['total_count_orders_today']}} шт. на {{data['total_sum_orders_today']}}₽</b><br>
 🆔 Артикул: <a href="https://www.wildberries.ru/catalog/{{data['nmId']}}/detail.aspx?targetUrl=SP">{{data['nmId']}}</a><br>
-📂 {{data['subject']}}<br>
-™️ {{data['brand']}}<br>
+📂 {{data['subject']|safe}}<br>
+™️ {{data['brand']|safe}}<br>
 {% if data['techSize'] != '0' %}
 📏Размер: <b>data['techSize']</b><br>
 {% endif %}
@@ -18,7 +18,7 @@
 💬 Отзывы: {{data['feedbacks']}}<br>
 ⏳ Сегодня таких: <b>{{data['number_orders_with_this_nmId_today']}} на {{data['total_sum_orders_with_this_nmId_today']}}₽</b><br>
 ⌛️ Вчера таких: <b>{{data['number_orders_with_this_nmId_yesterday']}} на {{data['total_sum_orders_with_this_nmId_yesterday']}}₽</b><br>
-🌎 {{data['warehouseName']}}<br>
+🌎 {{data['warehouseName']|safe}}<br>
 🚛 В пути до клиента: <b>{{data['inWayToClient']}}</b><br>
 🚚 В пути от клиента: <b>{{data['inWayFromClient']}}</b><br>
 📦 Остаток на складе: <b>{{data['quantity']}}</b><br>
