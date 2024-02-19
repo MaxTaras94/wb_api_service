@@ -14,6 +14,12 @@ import urllib.request
 
 
 
+def get_all_barcodes(operations: List[dict]) -> List[str]:
+    '''Функция возвращает список bar-кодов по полученному списку заказов/продаж/возвратов
+    '''
+    return [_["barcode"] for _ in operations]
+
+
 def operations_sorter(operations: List[dict]) -> List[dict]:
     '''Функция на вход получает данные из API WB о заказах/возвратах/продажах
        Добавляет в данные дату по каждой операции в формате datetime.datetime,

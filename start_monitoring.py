@@ -3,7 +3,7 @@ import aiohttp
 from api.data_for_monitoring import OperationDataListResponse
 from app.settings import settings
 from app.logger import logger
-from app.wb_monitoring.get_data_from_wb import get_data_from_wb, get_stocks_from_wb, parsing_order_data, parsing_sales_refunds_data
+from app.wb_monitoring.get_data_from_wb import get_all_barcodes, get_data_from_wb, get_stocks_from_wb, parsing_order_data, parsing_sales_refunds_data
 from api.notifications import update_time_last_in_wb
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import datetime
@@ -20,12 +20,13 @@ async def process_get_data(url_for_req: str,
                            tg_user_id: int,
                            date_today: str,
                            flag: int) -> dict:
-    data_from_wb: dict = await get_data_from_wb(url_for_req, 
+    data_from_wb: List[dict] = await get_data_from_wb(url_for_req, 
                                                 api_key_user,                                                
                                                 date_today,
                                                 flag)
+    all_barcodes: List[str] = get_all_barcodes(data_from_wb)
     await asyncio.sleep(65)
-    stocks_wb: dict = await get_stocks_from_wb(settings.stockurl, 
+    stocks_wb: List[dict] = await get_stocks_from_wb(settings.stockurl, 
                                                api_key_user,
                                                date_today,
                                                flag)
