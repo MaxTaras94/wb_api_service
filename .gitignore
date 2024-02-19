@@ -1,0 +1,13 @@
+# ide folders
+.idea/
+.vscode/
+
+# not project files
+__pycache__
+db.sqlite3
+.DS_Store
+.env
+.ruff_cache
+.bat
+.lock
+.xlsx
