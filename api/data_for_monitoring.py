@@ -68,8 +68,9 @@ async def get_data_api(type_operation_id: int, session: AsyncSession = Depends(o
                             .join(orm.TypeOperations, orm.Notification.type_operation_id == orm.TypeOperations.id) \
                             .where(and_(orm.TypeOperations.id == type_operation_id, orm.Notification.is_checking == True)) \
                             .order_by(orm.User.telegram_id)
-        results = await session.execute(statement)
-        data_for_monitoring = results.all()
+        async with session() as session:
+            results = await session.execute(statement)
+            data_for_monitoring = results.all()
         response_data = [
             OperationDataResponse.model_validate(u).model_dump() for u in data_for_monitoring
         ]
@@ -103,9 +104,9 @@ async def get_data_for_all_users(session: AsyncSession = Depends(orm.get_session
             .where(orm.Notification.is_checking == True) \
             .group_by(orm.WB.api_key) \
             .order_by(orm.WB.api_key)
-
-        results = await session.execute(statement)
-        data_for_monitoring = results.all()
+        async with session() as session:
+            results = await session.execute(statement)
+            data_for_monitoring = results.all()
         response_data = [
             OperationDataResponseShort.model_validate(u).model_dump() for u in data_for_monitoring
         ]
