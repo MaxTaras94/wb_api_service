@@ -24,7 +24,11 @@ async def process_get_data(url_for_req: str,
                                                 api_key_user,                                                
                                                 date_today,
                                                 flag)
-    all_barcodes: List[str] = get_all_barcodes(data_from_wb)
+    try:
+        all_barcodes: List[str] = get_all_barcodes(data_from_wb)
+    except Exception as e:
+        logger.error(e)                 
+        return {'tg_user_id':tg_user_id, 'parsing_data': []} 
     await asyncio.sleep(65)
     stocks_wb: List[dict] = await get_stocks_from_wb(settings.stockurl, 
                                                api_key_user,
@@ -36,7 +40,8 @@ async def process_get_data(url_for_req: str,
         else:
             parsing_data = await parsing_sales_refunds_data([data_from_wb, stocks_wb], tg_user_id, api_key_user, id_wb_key, name_key)
         return {'tg_user_id':tg_user_id, 'parsing_data':parsing_data}     
-    except:                 
+    except Exception as e:
+        logger.error(e)                 
         return {'tg_user_id':tg_user_id, 'parsing_data': []} 
 
 async def check_orders(date_today: str):
