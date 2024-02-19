@@ -15,9 +15,9 @@ import urllib.request
 
 
 def get_all_barcodes(operations: List[dict]) -> List[str]:
-    '''Функция возвращает список bar-кодов по полученному списку заказов/продаж/возвратов
+    '''Функция возвращает список уникальных bar-кодов по полученному списку заказов/продаж/возвратов
     '''
-    return [_["barcode"] for _ in operations]
+    return list(set([_["barcode"] for _ in operations]))
 
 
 def operations_sorter(operations: List[dict]) -> List[dict]:
@@ -30,6 +30,15 @@ def operations_sorter(operations: List[dict]) -> List[dict]:
         operation['parsed_date'] = datetime.datetime.fromisoformat(operation["date"])
         parsed_operations.append(operation)
     return sorted(parsed_operations, key=lambda d: d["parsed_date"])
+
+async def get_all_warehouses(api_key: str) -> List[dict]:
+    '''Функция возвращает список всех пользовательских складов
+    '''
+    headers = {"Authorization": api_key, "content-Type": "application/json"}
+    async with aiohttp.ClientSession() as client:
+        async with client.get(settings.warehouses, headers=headers) as warehouses:
+            warehouses_json = await warehouses.json()
+    return warehouses_json
 
 async def get_data_from_wb(link_operation_wb: str,
                            api_key: str,
