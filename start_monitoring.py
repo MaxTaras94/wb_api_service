@@ -30,7 +30,7 @@ async def process_get_data(url_for_req: str,
                                                date_today,
                                                flag)
     try:
-       if 'orders' in url_for_req:
+        if 'orders' in url_for_req:
             parsing_data = await parsing_order_data([data_from_wb, stocks_wb], tg_user_id, api_key_user, id_wb_key, name_key)
         else:
             parsing_data = await parsing_sales_refunds_data([data_from_wb, stocks_wb], tg_user_id, api_key_user, id_wb_key, name_key)
@@ -84,7 +84,7 @@ async def check_sales_and_refunds(date_today: str):
 async def start_checking():
     today = datetime.datetime.today().strftime("%Y-%m-%d")
     await check_orders(today)
-    await asyncio.sleep(65)
+    await asyncio.sleep(500)
     await check_sales_and_refunds(today)
         
 
@@ -92,7 +92,7 @@ async def start_checking():
 if __name__ == "__main__":
     try:
         scheduler = AsyncIOScheduler()
-        scheduler.add_job(start_checking, 'interval', minutes=10)
+        scheduler.add_job(start_checking, 'interval', minutes=30)
         scheduler.start()
     except Exception as e:
         logger.error(e)
