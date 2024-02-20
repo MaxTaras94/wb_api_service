@@ -47,7 +47,7 @@ async def get_statistics(user_telegram_id: int,
                       "sum_sales": math.ceil(sum([_["finishedPrice"] for _ in sales_and_refunds if _["saleID"][0] == "S" and \
                       datetime.datetime.fromisoformat(_['date']).date() == date_today.date()])),
                       "refunds": math.ceil(sum([1 for _ in sales_and_refunds if _["saleID"][0] == "R" and \
-                      datetime.datetime.fromisoformat(_['date']).date() == date_today])),
+                      datetime.datetime.fromisoformat(_['date']).date() == date_today.date()])),
                       "sum_refunds": math.ceil(sum([_["finishedPrice"] for _ in sales_and_refunds if _["saleID"][0] == "R" and \
                       datetime.datetime.fromisoformat(_['date']).date() == date_today.date()]))
                       }
