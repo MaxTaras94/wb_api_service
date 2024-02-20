@@ -95,7 +95,7 @@ async def start_checking():
         await check_orders(today)
     except Exception as e:
         logger.error(f'Ошибка в блоке start_checking в функции check_orders, {e}')
-    await asyncio.sleep(500)
+    await asyncio.sleep(60)
     try:
         await check_sales_and_refunds(today)
     except Exception as e:
@@ -106,7 +106,7 @@ async def start_checking():
 if __name__ == "__main__":
     try:
         scheduler = AsyncIOScheduler()
-        scheduler.add_job(start_checking, 'interval', minutes=30)
+        scheduler.add_job(start_checking, 'interval', minutes=3)
         scheduler.start()
     except Exception as e:
         logger.error(f'Ошибка в блоке __name__, {e}')
