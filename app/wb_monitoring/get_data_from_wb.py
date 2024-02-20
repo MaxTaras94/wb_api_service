@@ -146,10 +146,12 @@ async def parsing_order_data(orders_from_wb: List[List[dict]],
     time_last_order_in_wb_from_db = await get_last_time_operation(1, id_wb_key, date_today)
     stocks = orders_from_wb[1]
     orders = operations_sorter(orders_from_wb[0])
+    time_last_order_in_wb = time_last_order_in_wb_from_db
     for order in orders:
-        if not order["isCancel"]:
-            date_and_time_order = order['parsed_date']
+        date_and_time_order = order['parsed_date']
+        if not order["isCancel"]:  
             if date_and_time_order > time_last_order_in_wb_from_db and date_and_time_order.date() >= date_today.date():
+                time_last_order_in_wb = date_and_time_order
                 feedbacks, reviewRating = await get_feedback_and_rating(order["nmId"])
                 img_link = await generic_link_for_nmId_img(order["nmId"])
                 data_for_msg = {
@@ -192,8 +194,7 @@ async def parsing_order_data(orders_from_wb: List[List[dict]],
                 text_msg = render_template('msg_with_orders_for_client.j2', data={'data':data_for_msg, 'urllib':urllib.parse.quote})
                 await send_message_with_photo(tg_user_id, text_msg, img_link)
                 await asyncio.sleep(0.5)
-    if date_and_time_order > time_last_order_in_wb_from_db:
-        await update_time_last_in_wb(1, id_wb_key, date_and_time_order.isoformat())
+    await update_time_last_in_wb(1, id_wb_key, time_last_order_in_wb.isoformat())
 
 async def parsing_sales_refunds_data(operations_from_wb: List[List[dict]],
                                      tg_user_id: int,
@@ -210,6 +211,8 @@ async def parsing_sales_refunds_data(operations_from_wb: List[List[dict]],
     time_last_refund_in_wb_from_db = await get_last_time_operation(3, id_wb_key, date_today)
     stocks = operations_from_wb[1]
     operations = operations_sorter(operations_from_wb[0])
+    time_last_sale_in_wb = time_last_sale_in_wb_from_db
+    time_last_refund_in_wb = time_last_refund_in_wb_from_db
     for operation in operations:
         date_and_time_operation = operation["parsed_date"]
         if date_and_time_operation.date() >= date_today.date():
@@ -262,7 +265,5 @@ async def parsing_sales_refunds_data(operations_from_wb: List[List[dict]],
                 text_msg = render_template('msg_with_sales_and_refunds_for_client.j2', data={'data':data_for_msg, 'urllib': urllib.parse.quote})
                 await send_message_with_photo(tg_user_id, text_msg, img_link)
                 await asyncio.sleep(0.5)
-    if time_last_sale_in_wb > time_last_sale_in_wb_from_db:
-        await update_time_last_in_wb(2, id_wb_key, time_last_sale_in_wb.isoformat())
-    if time_last_refund_in_wb > time_last_refund_in_wb_from_db:
-        await update_time_last_in_wb(3, id_wb_key, time_last_refund_in_wb.isoformat())
+    await update_time_last_in_wb(2, id_wb_key, time_last_sale_in_wb.isoformat())
+    await update_time_last_in_wb(3, id_wb_key, time_last_refund_in_wb.isoformat())

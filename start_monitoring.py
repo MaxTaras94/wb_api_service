@@ -29,7 +29,7 @@ async def process_get_data(url_for_req: str,
     except Exception as e:
         logger.error(e)                 
         return {'tg_user_id':tg_user_id, 'parsing_data': []} 
-    await asyncio.sleep(65)
+    await asyncio.sleep(5)
     stocks_wb: List[dict] = await get_stocks_from_wb(settings.stockurl, 
                                                api_key_user,
                                                date_today,
@@ -50,6 +50,7 @@ async def check_orders(date_today: str):
     async with aiohttp.ClientSession() as client:      
         async with client.get(f"{settings.server_host}/api/monitoring/get_data/1/") as response_orders:
             users_subscribed_to_orders: OperationDataListResponse = await response_orders.json()# данные из БД о пользователях, которые подписаны на получаение уведомлений о Заказах
+    print(f"в ф-ции check_orders. len users_subscribed_to_orders = {len(users_subscribed_to_orders)}")
     tasks = []
     for user in users_subscribed_to_orders['data']:
         task = asyncio.create_task(process_get_data(settings.ordersurl, 
@@ -60,6 +61,7 @@ async def check_orders(date_today: str):
                                                     date_today,
                                                     0))
         tasks.append(task)
+    print(f"в ф-ции check_orders. len tasks = {len(tasks)}")
     await asyncio.gather(*tasks, return_exceptions=False)
 
 async def check_sales_and_refunds(date_today: str):
@@ -90,7 +92,7 @@ async def check_sales_and_refunds(date_today: str):
 async def start_checking():
     today = datetime.datetime.today().strftime("%Y-%m-%d")
     await check_orders(today)
-    await asyncio.sleep(500)
+    await asyncio.sleep(20)
     await check_sales_and_refunds(today)
         
 
@@ -98,7 +100,7 @@ async def start_checking():
 if __name__ == "__main__":
     try:
         scheduler = AsyncIOScheduler()
-        scheduler.add_job(start_checking, 'interval', minutes=30)
+        scheduler.add_job(start_checking, 'interval', minutes=2)
         scheduler.start()
     except Exception as e:
         logger.error(e)
