@@ -29,7 +29,7 @@ async def process_get_data(url_for_req: str,
     except Exception as e:
         logger.error(e)                 
         return {'tg_user_id':tg_user_id, 'parsing_data': []} 
-    await asyncio.sleep(5)
+    await asyncio.sleep(15)
     stocks_wb: List[dict] = await get_stocks_from_wb(settings.stockurl, 
                                                api_key_user,
                                                date_today,
@@ -92,7 +92,7 @@ async def check_sales_and_refunds(date_today: str):
 async def start_checking():
     today = datetime.datetime.today().strftime("%Y-%m-%d")
     await check_orders(today)
-    await asyncio.sleep(20)
+    await asyncio.sleep(500)
     await check_sales_and_refunds(today)
         
 
@@ -100,7 +100,7 @@ async def start_checking():
 if __name__ == "__main__":
     try:
         scheduler = AsyncIOScheduler()
-        scheduler.add_job(start_checking, 'interval', minutes=2)
+        scheduler.add_job(start_checking, 'interval', minutes=30)
         scheduler.start()
     except Exception as e:
         logger.error(e)
