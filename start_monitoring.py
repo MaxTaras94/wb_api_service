@@ -91,9 +91,15 @@ async def check_sales_and_refunds(date_today: str):
 
 async def start_checking():
     today = datetime.datetime.today().strftime("%Y-%m-%d")
-    await check_orders(today)
+    try:
+        await check_orders(today)
+    except Exception as e:
+        logger.error(f'Ошибка в блоке start_checking в функции check_orders, {e}')
     await asyncio.sleep(500)
-    await check_sales_and_refunds(today)
+    try:
+        await check_sales_and_refunds(today)
+    except Exception as e:
+        ogger.error(f'Ошибка в блоке start_checking в функции check_sales_and_refunds, {e}')
         
 
 
@@ -103,7 +109,7 @@ if __name__ == "__main__":
         scheduler.add_job(start_checking, 'interval', minutes=30)
         scheduler.start()
     except Exception as e:
-        logger.error(e)
+        logger.error(f'Ошибка в блоке __name__, {e}')
     try:
         asyncio.get_event_loop().run_forever()
     except (KeyboardInterrupt, SystemExit):
