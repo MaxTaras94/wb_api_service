@@ -41,7 +41,7 @@ async def process_get_data(url_for_req: str,
             parsing_data = await parsing_sales_refunds_data([data_from_wb, stocks_wb], tg_user_id, api_key_user, id_wb_key, name_key)
         return {'tg_user_id':tg_user_id, 'parsing_data':parsing_data}     
     except Exception as e:
-        logger.error(e)                 
+        logger.error(f"Ошибка при парсинге {url_for_req}, для пользователя {tg_user_id} api_key_user = {api_key_user}. \n Текст ошибки: {e}")                 
         return {'tg_user_id':tg_user_id, 'parsing_data': []} 
 
 async def check_orders(date_today: str):
@@ -62,7 +62,7 @@ async def check_orders(date_today: str):
                                                     0))
         tasks.append(task)
     print(f"в ф-ции check_orders. len tasks = {len(tasks)}")
-    await asyncio.gather(*tasks, return_exceptions=False)
+    await asyncio.gather(*tasks, return_exceptions=True)
 
 async def check_sales_and_refunds(date_today: str):
     '''Функция для проверки продаж и возвратов WB
@@ -87,7 +87,7 @@ async def check_sales_and_refunds(date_today: str):
                                                     date_today,
                                                     0))
         tasks.append(task)
-    await asyncio.gather(*tasks, return_exceptions=False)
+    await asyncio.gather(*tasks, return_exceptions=True)
 
 async def start_checking():
     today = datetime.datetime.today().strftime("%Y-%m-%d")
