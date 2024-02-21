@@ -148,7 +148,8 @@ async def parsing_order_data(orders_from_wb: List[List[dict]],
     stocks = orders_from_wb[1]
     orders = operations_sorter(orders_from_wb[0])
     time_last_order_in_wb = time_last_order_in_wb_from_db
-    for order in orders:
+    try:
+        for order in orders:
         date_and_time_order = order['parsed_date']
         if not order["isCancel"]:  
             if date_and_time_order > time_last_order_in_wb_from_db and date_and_time_order.date() >= date_today.date():
@@ -194,7 +195,11 @@ async def parsing_order_data(orders_from_wb: List[List[dict]],
                 text_msg = render_template('msg_with_orders_for_client.j2', data={'data':data_for_msg, 'quote':quote})
                 await send_message_with_photo(tg_user_id, text_msg, img_link)
                 await asyncio.sleep(0.5)
-    await update_time_last_in_wb(1, id_wb_key, time_last_order_in_wb.isoformat())
+        await update_time_last_in_wb(1, id_wb_key, time_last_order_in_wb.isoformat())
+    except Exception as e:
+        logger.error(f"data_for_msg = {data_for_msg}\ntg_user_id = {tg_user_id}\n \
+        api_key_user={api_key_user}\nid_wb_key= {id_wb_key}name_key\nТекст ошибки: {e}")
+
 
 async def parsing_sales_refunds_data(operations_from_wb: List[List[dict]],
                                      tg_user_id: int,
@@ -213,56 +218,60 @@ async def parsing_sales_refunds_data(operations_from_wb: List[List[dict]],
     operations = operations_sorter(operations_from_wb[0])
     time_last_sale_in_wb = time_last_sale_in_wb_from_db
     time_last_refund_in_wb = time_last_refund_in_wb_from_db
-    for operation in operations:
-        date_and_time_operation = operation["parsed_date"]
-        if date_and_time_operation.date() >= date_today.date():
-            if operation["saleID"][0] == "S" and date_and_time_operation > time_last_sale_in_wb_from_db or operation["saleID"][0] == "R" and \
-            date_and_time_operation > time_last_refund_in_wb_from_db:
-                feedbacks, reviewRating = await get_feedback_and_rating(operation["nmId"])
-                img_link = await generic_link_for_nmId_img(operation["nmId"])
-                time_last_sale_in_wb = date_and_time_operation if operation["saleID"][0] == "S" else time_last_sale_in_wb_from_db
-                time_last_refund_in_wb = date_and_time_operation if operation["saleID"][0] == "R" else time_last_refund_in_wb_from_db
-                data_for_msg = {
-                    "date_and_time_operation": date_and_time_operation.strftime("%d.%m.%Y %H:%M:%S"),
-                    "number_operations_with_this_nmId_today": digit_separator(math.ceil(sum([1 for _ in operations if _["nmId"] == operation["nmId"] \
-                    and all([_["saleID"][0] == operation["saleID"][0], _["parsed_date"] <= date_and_time_operation,\
-                    _["parsed_date"] >= date_today])]))),
-                    "total_sum_operations_today": digit_separator(math.ceil(sum([_["finishedPrice"] for _ in operations if all([_["saleID"][0] == operation["saleID"][0],\
-                    _["parsed_date"] <= date_and_time_operation, _["parsed_date"] >= date_today])]))),
-                    "total_sum_operations_with_this_nmId_today": digit_separator(math.ceil(sum([_["finishedPrice"] for _ in operations \
-                    if all([_["nmId"] == operation["nmId"], _["saleID"][0] == operation["saleID"][0], \
-                    _["parsed_date"] <= date_and_time_operation, _["parsed_date"] >= date_today])]))),
-                    "total_count_operations_today": digit_separator(math.ceil(sum([1 for _ in operations if all([_["saleID"][0] == operation["saleID"][0],\
-                    _["parsed_date"] <= date_and_time_operation, _["parsed_date"] >= date_today])]))),
-                    "number_operations_with_this_nmId_yesterday": digit_separator(math.ceil(sum([1 for _ in operations if _["nmId"] == operation["nmId"] \
-                    and _["saleID"][0] == operation["saleID"][0]]))),
-                    "total_sum_operations_with_this_nmId_yesterday": digit_separator(math.ceil(sum([_["finishedPrice"] for _ in operations \
-                    if operation["nmId"] == _["nmId"] and _["saleID"][0] == operation["saleID"][0]]))),
-                    "spp_percent": operation["spp"],
-                    "spp_sum": digit_separator(math.ceil((operation["spp"]*operation["priceWithDisc"])/100)),
-                    "name_key": name_key if name_key is not None else api_key_user[:10]+"..."+api_key_user[-10:],
-                    "img": img_link,
-                    "finishedPrice": digit_separator(math.ceil(operation["finishedPrice"])),
-                    "nmId": operation["nmId"],
-                    "techSize": operation["techSize"],
-                    "subject": operation["subject"],
-                    "brand": operation["brand"],
-                    "supplierArticle": operation["supplierArticle"],
-                    "typeOperation": "Продажа 💰" if operation["saleID"][0] == "S" else "Возврат ↩️",
-                    "feedbacks": feedbacks,
-                    "reviewRating": reviewRating,
-                    "warehouseName": operation["warehouseName"] +" → "+operation["regionName"]
-                }    
-                try:
-                    data_for_msg['inWayToClient'] = digit_separator(sum([_['inWayToClient'] for _ in stocks if _["nmId"] == operation["nmId"]]))
-                    data_for_msg['inWayFromClient'] = digit_separator(sum([_['inWayFromClient'] for _ in stocks if _["nmId"] == operation["nmId"]]))
-                    data_for_msg['quantity'] = digit_separator(sum([_['quantity'] for _ in stocks if _["nmId"] == operation["nmId"]]))
-                except TypeError:
-                    data_for_msg['inWayToClient'] = "?"
-                    data_for_msg['inWayFromClient'] = "?"
-                    data_for_msg['quantity'] = "?"
-                text_msg = render_template('msg_with_sales_and_refunds_for_client.j2', data={'data':data_for_msg, 'quote':quote})
-                await send_message_with_photo(tg_user_id, text_msg, img_link)
-                await asyncio.sleep(0.5)
-    await update_time_last_in_wb(2, id_wb_key, time_last_sale_in_wb.isoformat())
-    await update_time_last_in_wb(3, id_wb_key, time_last_refund_in_wb.isoformat())
+    try:
+        for operation in operations:
+            date_and_time_operation = operation["parsed_date"]
+            if date_and_time_operation.date() >= date_today.date():
+                if operation["saleID"][0] == "S" and date_and_time_operation > time_last_sale_in_wb_from_db or operation["saleID"][0] == "R" and \
+                date_and_time_operation > time_last_refund_in_wb_from_db:
+                    feedbacks, reviewRating = await get_feedback_and_rating(operation["nmId"])
+                    img_link = await generic_link_for_nmId_img(operation["nmId"])
+                    time_last_sale_in_wb = date_and_time_operation if operation["saleID"][0] == "S" else time_last_sale_in_wb_from_db
+                    time_last_refund_in_wb = date_and_time_operation if operation["saleID"][0] == "R" else time_last_refund_in_wb_from_db
+                    data_for_msg = {
+                        "date_and_time_operation": date_and_time_operation.strftime("%d.%m.%Y %H:%M:%S"),
+                        "number_operations_with_this_nmId_today": digit_separator(math.ceil(sum([1 for _ in operations if _["nmId"] == operation["nmId"] \
+                        and all([_["saleID"][0] == operation["saleID"][0], _["parsed_date"] <= date_and_time_operation,\
+                        _["parsed_date"] >= date_today])]))),
+                        "total_sum_operations_today": digit_separator(math.ceil(sum([_["finishedPrice"] for _ in operations if all([_["saleID"][0] == operation["saleID"][0],\
+                        _["parsed_date"] <= date_and_time_operation, _["parsed_date"] >= date_today])]))),
+                        "total_sum_operations_with_this_nmId_today": digit_separator(math.ceil(sum([_["finishedPrice"] for _ in operations \
+                        if all([_["nmId"] == operation["nmId"], _["saleID"][0] == operation["saleID"][0], \
+                        _["parsed_date"] <= date_and_time_operation, _["parsed_date"] >= date_today])]))),
+                        "total_count_operations_today": digit_separator(math.ceil(sum([1 for _ in operations if all([_["saleID"][0] == operation["saleID"][0],\
+                        _["parsed_date"] <= date_and_time_operation, _["parsed_date"] >= date_today])]))),
+                        "number_operations_with_this_nmId_yesterday": digit_separator(math.ceil(sum([1 for _ in operations if _["nmId"] == operation["nmId"] \
+                        and _["saleID"][0] == operation["saleID"][0]]))),
+                        "total_sum_operations_with_this_nmId_yesterday": digit_separator(math.ceil(sum([_["finishedPrice"] for _ in operations \
+                        if operation["nmId"] == _["nmId"] and _["saleID"][0] == operation["saleID"][0]]))),
+                        "spp_percent": operation["spp"],
+                        "spp_sum": digit_separator(math.ceil((operation["spp"]*operation["priceWithDisc"])/100)),
+                        "name_key": name_key if name_key is not None else api_key_user[:10]+"..."+api_key_user[-10:],
+                        "img": img_link,
+                        "finishedPrice": digit_separator(math.ceil(operation["finishedPrice"])),
+                        "nmId": operation["nmId"],
+                        "techSize": operation["techSize"],
+                        "subject": operation["subject"],
+                        "brand": operation["brand"],
+                        "supplierArticle": operation["supplierArticle"],
+                        "typeOperation": "Продажа 💰" if operation["saleID"][0] == "S" else "Возврат ↩️",
+                        "feedbacks": feedbacks,
+                        "reviewRating": reviewRating,
+                        "warehouseName": operation["warehouseName"] +" → "+operation["regionName"]
+                    }    
+                    try:
+                        data_for_msg['inWayToClient'] = digit_separator(sum([_['inWayToClient'] for _ in stocks if _["nmId"] == operation["nmId"]]))
+                        data_for_msg['inWayFromClient'] = digit_separator(sum([_['inWayFromClient'] for _ in stocks if _["nmId"] == operation["nmId"]]))
+                        data_for_msg['quantity'] = digit_separator(sum([_['quantity'] for _ in stocks if _["nmId"] == operation["nmId"]]))
+                    except TypeError:
+                        data_for_msg['inWayToClient'] = "?"
+                        data_for_msg['inWayFromClient'] = "?"
+                        data_for_msg['quantity'] = "?"
+                    text_msg = render_template('msg_with_sales_and_refunds_for_client.j2', data={'data':data_for_msg, 'quote':quote})
+                    await send_message_with_photo(tg_user_id, text_msg, img_link)
+                    await asyncio.sleep(0.5)
+        await update_time_last_in_wb(2, id_wb_key, time_last_sale_in_wb.isoformat())
+        await update_time_last_in_wb(3, id_wb_key, time_last_refund_in_wb.isoformat())
+    except Exception as e:
+        logger.error(f"data_for_msg = {data_for_msg}\ntg_user_id = {tg_user_id}\n \
+        api_key_user={api_key_user}\nid_wb_key= {id_wb_key}name_key\nТекст ошибки: {e}")

@@ -34,15 +34,11 @@ async def process_get_data(url_for_req: str,
                                                api_key_user,
                                                date_today,
                                                flag)
-    try:
-        if 'orders' in url_for_req:
-            parsing_data = await parsing_order_data([data_from_wb, stocks_wb], tg_user_id, api_key_user, id_wb_key, name_key)
-        else:
-            parsing_data = await parsing_sales_refunds_data([data_from_wb, stocks_wb], tg_user_id, api_key_user, id_wb_key, name_key)
-        return {'tg_user_id':tg_user_id, 'parsing_data':parsing_data}     
-    except Exception as e:
-        logger.error(f"Ошибка при парсинге {url_for_req}, для пользователя {tg_user_id} api_key_user = {api_key_user}. \n Текст ошибки: {e}")                 
-        return {'tg_user_id':tg_user_id, 'parsing_data': []} 
+    if 'orders' in url_for_req:
+        parsing_data = await parsing_order_data([data_from_wb, stocks_wb], tg_user_id, api_key_user, id_wb_key, name_key)
+    else:
+        parsing_data = await parsing_sales_refunds_data([data_from_wb, stocks_wb], tg_user_id, api_key_user, id_wb_key, name_key)
+    return {'tg_user_id':tg_user_id, 'parsing_data':parsing_data}     
 
 async def check_orders(date_today: str):
     '''Функция для проверки заказов WB
@@ -50,7 +46,6 @@ async def check_orders(date_today: str):
     async with aiohttp.ClientSession() as client:      
         async with client.get(f"{settings.server_host}/api/monitoring/get_data/1/") as response_orders:
             users_subscribed_to_orders: OperationDataListResponse = await response_orders.json()# данные из БД о пользователях, которые подписаны на получаение уведомлений о Заказах
-    print(f"в ф-ции check_orders. len users_subscribed_to_orders = {len(users_subscribed_to_orders)}")
     tasks = []
     for user in users_subscribed_to_orders['data']:
         task = asyncio.create_task(process_get_data(settings.ordersurl, 
@@ -61,7 +56,6 @@ async def check_orders(date_today: str):
                                                     date_today,
                                                     0))
         tasks.append(task)
-    print(f"в ф-ции check_orders. len tasks = {len(tasks)}")
     await asyncio.gather(*tasks, return_exceptions=True)
 
 async def check_sales_and_refunds(date_today: str):
@@ -91,16 +85,9 @@ async def check_sales_and_refunds(date_today: str):
 
 async def start_checking():
     today = datetime.datetime.today().strftime("%Y-%m-%d")
-    try:
-        await check_orders(today)
-    except Exception as e:
-        logger.error(f'Ошибка в блоке start_checking в функции check_orders, {e}')
+    await check_orders(today)
     await asyncio.sleep(500)
-    try:
-        await check_sales_and_refunds(today)
-    except Exception as e:
-        ogger.error(f'Ошибка в блоке start_checking в функции check_sales_and_refunds, {e}')
-        
+    await check_sales_and_refunds(today)        
 
 
 if __name__ == "__main__":
