@@ -11,6 +11,7 @@ import math
 from random import random, randint
 from typing import List, Tuple
 import urllib.request
+from urllib.parse import quote
 
 
 
@@ -190,7 +191,7 @@ async def parsing_order_data(orders_from_wb: List[List[dict]],
                     data_for_msg['inWayToClient'] = "?"
                     data_for_msg['inWayFromClient'] = "?"
                     data_for_msg['quantity'] = "?"
-                text_msg = render_template('msg_with_orders_for_client.j2', data={'data':data_for_msg, 'urllib':urllib.parse.quote})
+                text_msg = render_template('msg_with_orders_for_client.j2', data={'data':data_for_msg, 'quote':quote})
                 await send_message_with_photo(tg_user_id, text_msg, img_link)
                 await asyncio.sleep(0.5)
     await update_time_last_in_wb(1, id_wb_key, time_last_order_in_wb.isoformat())
@@ -260,7 +261,7 @@ async def parsing_sales_refunds_data(operations_from_wb: List[List[dict]],
                     data_for_msg['inWayToClient'] = "?"
                     data_for_msg['inWayFromClient'] = "?"
                     data_for_msg['quantity'] = "?"
-                text_msg = render_template('msg_with_sales_and_refunds_for_client.j2', data={'data':data_for_msg, 'urllib': urllib.parse.quote})
+                text_msg = render_template('msg_with_sales_and_refunds_for_client.j2', data={'data':data_for_msg, 'quote':quote})
                 await send_message_with_photo(tg_user_id, text_msg, img_link)
                 await asyncio.sleep(0.5)
     await update_time_last_in_wb(2, id_wb_key, time_last_sale_in_wb.isoformat())
