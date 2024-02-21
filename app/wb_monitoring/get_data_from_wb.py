@@ -150,51 +150,51 @@ async def parsing_order_data(orders_from_wb: List[List[dict]],
     time_last_order_in_wb = time_last_order_in_wb_from_db
     try:
         for order in orders:
-        date_and_time_order = order['parsed_date']
-        if not order["isCancel"]:  
-            if date_and_time_order > time_last_order_in_wb_from_db and date_and_time_order.date() >= date_today.date():
-                time_last_order_in_wb = date_and_time_order
-                feedbacks, reviewRating = await get_feedback_and_rating(order["nmId"])
-                img_link = await generic_link_for_nmId_img(order["nmId"])
-                data_for_msg = {
-                    "date_and_time_order": date_and_time_order.strftime("%d.%m.%Y %H:%M:%S"),
-                    "number_orders_with_this_nmId_today": digit_separator(math.ceil(sum([1 for _ in orders if _["nmId"] == order["nmId"] and \
-                    _["parsed_date"] >= date_today and _["parsed_date"] <= date_and_time_order]))),
-                    "number_orders_with_this_nmId_yesterday": digit_separator(math.ceil(sum([1 for _ in orders if _["nmId"] == order["nmId"] and \
-                    _["parsed_date"] <= date_today]))),
-                    "total_count_orders_today": digit_separator(math.ceil(sum([1 for _ in orders if _["parsed_date"] >= date_today and \
-                    _["parsed_date"] <= date_and_time_order]))),
-                    "total_sum_orders_today": digit_separator(math.ceil(sum([_["finishedPrice"] for _ in orders if \
-                    _["parsed_date"] >= date_today and _["parsed_date"] <= date_and_time_order]))),
-                    "total_sum_orders_with_this_nmId_today": digit_separator(math.ceil(sum([_["finishedPrice"] for _ in orders if \
-                    _["nmId"] == order["nmId"] and _["parsed_date"] >= date_today and _["parsed_date"] <= date_and_time_order]))),
-                    "total_sum_orders_with_this_nmId_yesterday": digit_separator(math.ceil(sum([_["finishedPrice"] for _ in orders if \
-                    _["nmId"] == order["nmId"] and _["parsed_date"] <= date_today]))),
-                    "spp_percent": order["spp"],
-                    "spp_sum": digit_separator(math.ceil((order["spp"]*order["priceWithDisc"])/100)),
-                    "name_key": name_key if name_key is not None else api_key_user[:10]+"..."+api_key_user[-10:],
-                    "img": img_link,
-                    "finishedPrice": digit_separator(math.ceil(order["finishedPrice"])),
-                    "nmId": order["nmId"],
-                    "techSize": order["techSize"],
-                    "subject": order["subject"],
-                    "brand": order["brand"],
-                    "supplierArticle": order["supplierArticle"],
-                    "feedbacks": feedbacks,
-                    "reviewRating": reviewRating,
-                    "warehouseName": f"{order['warehouseName']} → {order['regionName']}"
-                }    
-                try:
-                    data_for_msg['inWayToClient'] = digit_separator(sum([_['inWayToClient'] for _ in stocks if _["nmId"] == order["nmId"]]))
-                    data_for_msg['inWayFromClient'] = digit_separator((sum([_['inWayFromClient'] for _ in stocks if _["nmId"] == order["nmId"]])))
-                    data_for_msg['quantity'] = digit_separator(sum([_['quantity'] for _ in stocks if _["nmId"] == order["nmId"]]))
-                except TypeError:
-                    data_for_msg['inWayToClient'] = "?"
-                    data_for_msg['inWayFromClient'] = "?"
-                    data_for_msg['quantity'] = "?"
-                text_msg = render_template('msg_with_orders_for_client.j2', data={'data':data_for_msg, 'quote':quote})
-                await send_message_with_photo(tg_user_id, text_msg, img_link)
-                await asyncio.sleep(0.5)
+            date_and_time_order = order['parsed_date']
+            if not order["isCancel"]:  
+                if date_and_time_order > time_last_order_in_wb_from_db and date_and_time_order.date() >= date_today.date():
+                    time_last_order_in_wb = date_and_time_order
+                    feedbacks, reviewRating = await get_feedback_and_rating(order["nmId"])
+                    img_link = await generic_link_for_nmId_img(order["nmId"])
+                    data_for_msg = {
+                        "date_and_time_order": date_and_time_order.strftime("%d.%m.%Y %H:%M:%S"),
+                        "number_orders_with_this_nmId_today": digit_separator(math.ceil(sum([1 for _ in orders if _["nmId"] == order["nmId"] and \
+                        _["parsed_date"] >= date_today and _["parsed_date"] <= date_and_time_order]))),
+                        "number_orders_with_this_nmId_yesterday": digit_separator(math.ceil(sum([1 for _ in orders if _["nmId"] == order["nmId"] and \
+                        _["parsed_date"] <= date_today]))),
+                        "total_count_orders_today": digit_separator(math.ceil(sum([1 for _ in orders if _["parsed_date"] >= date_today and \
+                        _["parsed_date"] <= date_and_time_order]))),
+                        "total_sum_orders_today": digit_separator(math.ceil(sum([_["finishedPrice"] for _ in orders if \
+                        _["parsed_date"] >= date_today and _["parsed_date"] <= date_and_time_order]))),
+                        "total_sum_orders_with_this_nmId_today": digit_separator(math.ceil(sum([_["finishedPrice"] for _ in orders if \
+                        _["nmId"] == order["nmId"] and _["parsed_date"] >= date_today and _["parsed_date"] <= date_and_time_order]))),
+                        "total_sum_orders_with_this_nmId_yesterday": digit_separator(math.ceil(sum([_["finishedPrice"] for _ in orders if \
+                        _["nmId"] == order["nmId"] and _["parsed_date"] <= date_today]))),
+                        "spp_percent": order["spp"],
+                        "spp_sum": digit_separator(math.ceil((order["spp"]*order["priceWithDisc"])/100)),
+                        "name_key": name_key if name_key is not None else api_key_user[:10]+"..."+api_key_user[-10:],
+                        "img": img_link,
+                        "finishedPrice": digit_separator(math.ceil(order["finishedPrice"])),
+                        "nmId": order["nmId"],
+                        "techSize": order["techSize"],
+                        "subject": order["subject"],
+                        "brand": order["brand"],
+                        "supplierArticle": order["supplierArticle"],
+                        "feedbacks": feedbacks,
+                        "reviewRating": reviewRating,
+                        "warehouseName": f"{order['warehouseName']} → {order['regionName']}"
+                    }    
+                    try:
+                        data_for_msg['inWayToClient'] = digit_separator(sum([_['inWayToClient'] for _ in stocks if _["nmId"] == order["nmId"]]))
+                        data_for_msg['inWayFromClient'] = digit_separator((sum([_['inWayFromClient'] for _ in stocks if _["nmId"] == order["nmId"]])))
+                        data_for_msg['quantity'] = digit_separator(sum([_['quantity'] for _ in stocks if _["nmId"] == order["nmId"]]))
+                    except TypeError:
+                        data_for_msg['inWayToClient'] = "?"
+                        data_for_msg['inWayFromClient'] = "?"
+                        data_for_msg['quantity'] = "?"
+                    text_msg = render_template('msg_with_orders_for_client.j2', data={'data':data_for_msg, 'quote':quote})
+                    await send_message_with_photo(tg_user_id, text_msg, img_link)
+                    await asyncio.sleep(0.5)
         await update_time_last_in_wb(1, id_wb_key, time_last_order_in_wb.isoformat())
     except Exception as e:
         logger.error(f"data_for_msg = {data_for_msg}\ntg_user_id = {tg_user_id}\n \
