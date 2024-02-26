@@ -13,13 +13,19 @@ from app.wb_monitoring.get_data_from_wb import (
 from api.notifications import update_time_last_in_wb
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import datetime
-from typing import List
+from typing import List, Tuple
 
 
 
-async def get_subscribers() -> OperationRegroupedDataResponse:
+async def get_subscribers() -> Tuple[OperationRegroupedDataResponse]:
     '''Функция возвращает список словарей пользователей, подписанных на получение уведомлений
     '''
+    async with aiohttp.ClientSession() as client:      
+        async with client.post(f"{settings.server_host}/api/monitoring/get_data/", json={'data':[1]}) as response_orders:
+            users_subscribed_to_orders: OperationDataListResponse = await response_orders.json()
+        async with client.post(f"{settings.server_host}/api/monitoring/get_data/", json={'data':[2,3]}) as response_sales_refunds:
+            users_subscribed_sales_and_refunds: OperationDataListResponse = await response_sales_refunds.json()
+    return users_subscribed_to_orders, users_subscribed_sales_and_refunds
 
 async def process_get_data(url_for_req: str, 
                            subscription: OperationRegroupedDataResponse,
@@ -73,6 +79,11 @@ async def check_sales_and_refunds(date_today: str):
         tasks.append(task)
     await asyncio.gather(*tasks, return_exceptions=True)
 
+
+async def check_operations(today_date: str):
+    pass
+    
+    
 async def start_checking():
     today = datetime.datetime.today().strftime("%Y-%m-%d")
     await check_orders(today)

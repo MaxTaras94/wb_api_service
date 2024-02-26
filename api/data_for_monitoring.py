@@ -18,6 +18,16 @@ class DataForMonitoring(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
     
+class OperationDataSimpleResponse(BaseModel):
+    telegram_id: int
+    type_operation: str
+    id: int
+    api_key: str
+    name_key: Optional[str]
+    is_checking: bool
+    
+    model_config = ConfigDict(from_attributes=True)
+    
     
 class OperationDataResponse(BaseModel):
     api_key: str
@@ -40,6 +50,8 @@ class OperationRegroupedDataListResponse(BaseModel):
 class OperationDataListResponse(BaseModel):
     data: list[OperationDataResponse]
 
+class OperationDataListSimpleResponse(BaseModel):
+    data: list[OperationDataSimpleResponse]
 
 router = APIRouter()
 
@@ -64,7 +76,7 @@ def regrouper_func(data: OperationDataListResponse) -> OperationRegroupedDataLis
     return new_data
     
 
-@router.get("/get_data/{type_operation_id}/", response_model=OperationDataListResponse)
+@router.get("/get_data/{type_operation_id}/", response_model=OperationDataListSimpleResponse)
 async def get_data_api(type_operation_id: int, session: AsyncSession = Depends(orm.get_session)) -> JSONResponse:
     '''Функция возвращает из БД api ключи пользователей и типы операций, на которые они подписаны
     '''
@@ -83,7 +95,7 @@ async def get_data_api(type_operation_id: int, session: AsyncSession = Depends(o
         results = await session.execute(statement)
         data_for_monitoring = results.all()
         response_data = [
-            OperationDataResponse.model_validate(u).model_dump() for u in data_for_monitoring
+            OperationDataSimpleResponse.model_validate(u).model_dump() for u in data_for_monitoring
         ]
         return JSONResponse(
         content={
