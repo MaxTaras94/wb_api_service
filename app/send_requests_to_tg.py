@@ -14,7 +14,10 @@ async def send_message_with_photo(
                                    text_message: str,
                                    link_img: str
                                   ) -> None:
-    url = f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendPhoto?chat_id={str(tg_user_id)}&photo={link_img}&caption={text_message}&parse_mode=HTML"
+    if link_img != "":
+        url = f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendPhoto?chat_id={str(tg_user_id)}&photo={link_img}&caption={text_message}&parse_mode=HTML"
+    else:
+        url = f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendMessage?chat_id={str(tg_user_id)}&text={text_message}&parse_mode=HTML"
     async with aiohttp.ClientSession() as client:
         await client.get(url)
         

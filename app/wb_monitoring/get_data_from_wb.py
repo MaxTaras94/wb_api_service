@@ -76,7 +76,7 @@ async def generic_link_for_nmId_img(nmId: int) -> str:
     nmId_str = str(nmId)
     if len(nmId_str) > 9 or len(nmId_str) < 8:
         return ""
-    for n in range(1, 14):
+    for n in range(1, 15):
         N = "0"+str(n) if n < 10 else str(n)
         if len(nmId_str) == 9:
             photo_url = f'https://basket-{N}.wb.ru/vol{nmId_str[0:4]}/part{nmId_str[0:6]}/{nmId_str}/images/big/1.webp'
