@@ -19,10 +19,19 @@ async def send_message_with_photo(
     else:
         url = f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendMessage?chat_id={str(tg_user_id)}&text={text_message}&parse_mode=HTML"
     async with aiohttp.ClientSession() as client:
-        await client.get(url)
+        try:
+            await client.get(url)
+        except:
+            pass
         
 async def check_user_is_subscriber_channel(tg_user_id: int) -> bool:
-    url = f"https://api.telegram.org/bot{settings.telegram_bot_token}/getChatMember?chat_id=@testchannel1234567890134&user_id={str(tg_user_id)}"
+    '''Функция возвращает True, если пользователь подписан на канал. Иначе возвращает False
+    '''
+    url = f"https://api.telegram.org/bot{settings.telegram_bot_token}/getChatMember?chat_id=@xoxlov_maxim&user_id={str(tg_user_id)}"
     async with aiohttp.ClientSession() as client:
-        res = await client.get(url)
-    return res['ok']
+        async with client.get(url) as subscribe:
+            data = await subscribe.json()
+    if data['ok'] == False or data['result']['status'] == 'left':
+        return False
+    else:
+        return True

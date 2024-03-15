@@ -1,4 +1,4 @@
-from api import data_for_monitoring, notifications, statistics, user, wb_keys 
+from api import bot_settings, data_for_monitoring, notifications, statistics, user, wb_keys 
 from app.logger import logger
 from app.settings import settings
 import contextlib
@@ -23,6 +23,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(title=settings.app_name, lifespan=lifespan, debug=True)
 
 
+app.include_router(bot_settings.router, prefix="/api/botsettings", tags=["botsettings"])
 app.include_router(user.router, prefix="/api/users", tags=["users"])
 app.include_router(wb_keys.router, prefix="/api/wb_keys", tags=["wb_keys"])
 app.include_router(statistics.router, prefix="/api", tags=["statistics"])

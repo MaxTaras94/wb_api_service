@@ -1,9 +1,10 @@
 import asyncio
 import aiohttp
 from api.data_for_monitoring import OperationDataListResponse, OperationRegroupedDataResponse
+from app.send_requests_to_tg import check_user_is_subscriber_channel
 from app.settings import settings
 from app.logger import logger
-from app.wb_monitoring.get_data_from_wb import (
+from app.wb_monitoring.get_data_from_wb_new import (
         get_all_barcodes,
         get_data_from_wb,
         get_stocks_from_wb,
@@ -13,24 +14,40 @@ from app.wb_monitoring.get_data_from_wb import (
 from api.notifications import update_time_last_in_wb
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import datetime
+import itertools
 from typing import List, Tuple
 
 
-
-async def get_subscribers() -> Tuple[OperationRegroupedDataResponse]:
+async def is_checking_subscription() -> bool:
+    '''Функция возвращает из БД False, если проверка подписки не активна, иначе вернёт True
+    '''
+    try:
+        async with aiohttp.ClientSession() as client:
+            async with client.get(settings.server_host+"/api/botsettings/get_status_check_subscription/") as check_subscription:
+                data = await check_subscription.json()
+        return data['is_checking']
+    except Exception as e:
+        return {'status': 'error', 'text_error': e, 'is_checking': None}
+        
+        
+async def get_subscribers(checking_subscription: bool) -> Tuple[OperationRegroupedDataResponse]:
     '''Функция возвращает список словарей пользователей, подписанных на получение уведомлений
     '''
     async with aiohttp.ClientSession() as client:      
-        async with client.post(f"{settings.server_host}/api/monitoring/get_data/", json={'data':[1]}) as response_orders:
-            users_subscribed_to_orders: OperationDataListResponse = await response_orders.json()
-        async with client.post(f"{settings.server_host}/api/monitoring/get_data/", json={'data':[2,3]}) as response_sales_refunds:
-            users_subscribed_sales_and_refunds: OperationDataListResponse = await response_sales_refunds.json()
-    return users_subscribed_to_orders, users_subscribed_sales_and_refunds
+        async with client.post(f"{settings.server_host}/api/monitoring/get_data_new/", json={'operations': [1,2,3], 
+                                                                                             'is_checking_subscription': checking_subscription
+                                                                                             }
+                                                                                             ) as response:
+            users_subscribed_to_opearations: OperationRegroupedDataResponse = await response.json()
+    return users_subscribed_to_opearations['data']
 
-async def process_get_data(url_for_req: str, 
+async def process_get_data(url_for_req: str,
+                           stocks_wb: List[dict],
                            subscription: OperationRegroupedDataResponse,
                            date_today: str
                            ) -> None:
+    '''В этой функции получается инфа от ВБ и отправляется на парсинг в соответствующие ф-ции, в зависимости от типа операции
+    '''
     data_from_wb: List[dict] = await get_data_from_wb(url_for_req, 
                                                       subscription['api_key'],                                                
                                                       date_today
@@ -39,62 +56,64 @@ async def process_get_data(url_for_req: str,
         all_barcodes: List[str] = get_all_barcodes(data_from_wb)
     except Exception as e:
         logger.error(e)                 
-    # await asyncio.sleep(65)
-    stocks_wb: List[dict] = await get_stocks_from_wb(settings.stockurl, 
-                                                     subscription['api_key'],
-                                                     date_today
-                                                     )
     if 'orders' in url_for_req:
+        logger.info(f"в ф-ции process_get_data, url_for_req = {url_for_req}. Перехожу  ф-цию parsing_order_data")
         parsing_data = await parsing_order_data([data_from_wb, stocks_wb], subscription)
     else:
+        logger.info(f"в ф-ции process_get_data, url_for_req = {url_for_req}. Перехожу  ф-цию parsing_sales_refunds_data")
         parsing_data = await parsing_sales_refunds_data([data_from_wb, stocks_wb], subscription)
 
-async def check_orders(date_today: str):
-    '''Функция для проверки заказов WB
+def create_task_list(stocks_wb: List[dict],
+                     subscription: OperationRegroupedDataResponse,
+                     date_today: str) -> list:
+    '''Формируем список задач для параллельной проверки
+       1 - Заказ
+       2 - Продажа
+       3 - Возврат
     '''
-    async with aiohttp.ClientSession() as client:      
-        async with client.post(f"{settings.server_host}/api/monitoring/get_data/", json={'data':[1]}) as response_orders:
-            users_subscribed_to_orders: OperationDataListResponse = await response_orders.json()# данные из БД о пользователях, которые подписаны на получаение уведомлений о Заказах
     tasks = []
-    for subscription in users_subscribed_to_orders['data']:
-        task = asyncio.create_task(process_get_data(settings.ordersurl, 
-                                                    subscription,
-                                                    date_today
-                                                    ))
-        tasks.append(task)
+    oparations = subscription['users'].keys()
+    if '1' not in oparations:
+        task = asyncio.create_task(process_get_data(settings.salesurl, stocks_wb, subscription, date_today))
+    elif '2' not in oparations and '3' not in oparations:
+        task = asyncio.create_task(process_get_data(settings.ordersurl, stocks_wb, subscription, date_today))
+    else:
+        task = asyncio.create_task(process_get_data(settings.ordersurl, stocks_wb, subscription, date_today))
+        task_1 = asyncio.create_task(process_get_data(settings.salesurl, stocks_wb, subscription, date_today))
+        tasks.append(task_1)
+    tasks.append(task)
+    return tasks
+
+async def check_operations(date_today: str):
+    
+    checking_subscription: bool = await is_checking_subscription()
+    subscribers: OperationRegroupedDataResponse = await get_subscribers(checking_subscription)
+    tasks = []
+    logger.info(f"subscribers = {subscribers}")
+    logger.info(f"checking_subscription = {checking_subscription}")
+    for subscription in subscribers:
+        if checking_subscription:
+            user_is_subscriber_channel = list(itertools.chain.from_iterable([[subscription['users'][key]['telegram_ids'][k]['is_subscriber'] for k in \
+            subscription['users'][key]['telegram_ids'].keys()] for key in subscription['users'].keys()])) #получаем список значений по ключу is_subscriber для каждого tg id из списка
+            if any(user_is_subscriber_channel): #проверяем есть ли пользователи подписанные на канал
+                stocks_wb: List[dict] = await get_stocks_from_wb(settings.stockurl, subscription['api_key'], date_today)
+                tasks.extend(create_task_list(stocks_wb, subscription, date_today))
+            else:
+                continue
+        else:
+            stocks_wb: List[dict] = await get_stocks_from_wb(settings.stockurl, subscription['api_key'], date_today)
+            tasks.extend(create_task_list(stocks_wb, subscription, date_today))
     await asyncio.gather(*tasks, return_exceptions=True)
 
-async def check_sales_and_refunds(date_today: str):
-    '''Функция для проверки продаж и возвратов WB
-    '''
-    async with aiohttp.ClientSession() as client: 
-        async with client.post(f"{settings.server_host}/api/monitoring/get_data/", json={'data':[2,3]}) as response:
-            users_subscribed_sales_and_refunds: OperationDataListResponse = await response.json() # данные из БД о пользователях, которые подписаны на получаение уведомлений о Продажах и Возвратах
-    tasks = []
-    for subscription in users_subscribed_sales_and_refunds:
-        task = asyncio.create_task(process_get_data(settings.salesurl, 
-                                                    subscription,
-                                                    date_today
-                                                    ))
-        tasks.append(task)
-    await asyncio.gather(*tasks, return_exceptions=True)
-
-
-async def check_operations(today_date: str):
-    pass
-    
-    
 async def start_checking():
     today = datetime.datetime.today().strftime("%Y-%m-%d")
-    await check_orders(today)
-    await asyncio.sleep(500)
-    await check_sales_and_refunds(today)        
+    await check_operations(today)
 
 
 if __name__ == "__main__":
     try:
         scheduler = AsyncIOScheduler()
-        scheduler.add_job(start_checking, 'interval', minutes=30)
+        scheduler.add_job(start_checking, 'interval', minutes=5)
         scheduler.start()
     except Exception as e:
         logger.error(f'Ошибка в блоке __name__\nТекст ошибки: {e}')

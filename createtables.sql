@@ -33,6 +33,13 @@ CREATE TABLE User_References (
     ref_user_telegram_id BigInt REFERENCES Users(telegram_id) ON DELETE CASCADE,
 );
 
+CREATE TABLE BotSettings (
+  id SERIAL PRIMARY KEY,
+  on_off BOOLEAN NOT NULL DEFAULT FALSE,
+  setting_name VARCHAR(255) NOT NULL,
+  setting_description TEXT
+);
+
 INSERT INTO Type_Operations (type_operation) VALUES
 ('Заказы'),
 ('Продажи'),

@@ -1,4 +1,6 @@
+from app.send_requests_to_tg import check_user_is_subscriber_channel
 from app.settings import settings
+import asyncio
 import datetime
 from fastapi import APIRouter, Depends, status
 from fastapi.responses import JSONResponse
@@ -6,7 +8,7 @@ import orm
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
 
 
 
@@ -56,22 +58,31 @@ class OperationDataListSimpleResponse(BaseModel):
 router = APIRouter()
 
 
-def regrouper_func(data: OperationDataListResponse) -> OperationRegroupedDataListResponse:
-    '''Функция для удобства работы с данными выполняет из перегруппироваку и возвращает обратно
+async def regrouper_func(data: OperationDataListResponse,
+                         is_checking_subscription: bool
+                         ) -> OperationRegroupedDataListResponse:
+    '''Функция для удобства работы с данными выполняет из перегруппировку и возвращает обратно
     '''   
     new_data = []
+    cache = {}
     for d in data:
-        result = {}
+        result = {}        
         for i, operation_id in enumerate(d['ids_operations']):
             if operation_id not in result:
                 result[operation_id] = {
                     'ids_wb_key': [],
                     'names_wb_key': [],
-                    'telegram_ids': []
+                    'telegram_ids': {}
                 }
             result[operation_id]['ids_wb_key'].append(d['ids_wb_key'][i])
             result[operation_id]['names_wb_key'].append(d['names_wb_key'][i])
-            result[operation_id]['telegram_ids'].append(d['telegram_ids'][i])
+            if d['telegram_ids'][i] not in cache:
+                if is_checking_subscription:
+                    cache[d['telegram_ids'][i]] = await check_user_is_subscriber_channel(d['telegram_ids'][i])
+                else:
+                    cache[d['telegram_ids'][i]] = None # это запись будет означать что мы не проверяли подписан ли пользователь на канал или нет
+            result[operation_id]['telegram_ids'][d['telegram_ids'][i]] = {'is_subscriber': cache[d['telegram_ids'][i]]}
+            await asyncio.sleep(0.05)
         new_data.append({"api_key": d['api_key'], "users": result})
     return new_data
     
@@ -112,14 +123,14 @@ async def get_data_api(type_operation_id: int, session: AsyncSession = Depends(o
     )
 
 @router.post("/get_data_new/", response_model=OperationRegroupedDataListResponse)
-async def get_data_for_all_users(type_operations_ids: Dict[str, List[int]],
+async def get_data_for_all_users(data: Dict[str, List[int] | bool],
                                  session: AsyncSession = Depends(orm.get_session)
                                  ) -> JSONResponse:
     '''Функция возвращает из БД api ключи и всех пользователей, которые подписаны на уведомления с этим ключом по типу операций
         :type_operations_ids:
     '''
     try:
-        operations_ids = type_operations_ids['data']
+        operations_ids = data['operations']
         statement = select(
             orm.WB.api_key,
             func.array_agg(orm.TypeOperations.id).label('ids_operations'),
@@ -138,7 +149,7 @@ async def get_data_for_all_users(type_operations_ids: Dict[str, List[int]],
         response_data_intermediate = [
             OperationDataResponse.model_validate(u).model_dump() for u in data_for_monitoring
         ]
-        response_data = regrouper_func(response_data_intermediate)
+        response_data = await regrouper_func(response_data_intermediate, data['is_checking_subscription'])
         return JSONResponse(
         content={
             "status": "ok",

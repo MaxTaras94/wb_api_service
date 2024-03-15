@@ -43,7 +43,7 @@ def setup_logger() -> "Logger":
     logging.basicConfig(handlers=[InterceptHandler()], level=0)
 
     # Путь к файлу, в который будут писаться логи
-    log_file_path = "/home/Hohlov/wb_api_service/logfile.log"
+    log_file_path = "logfile.log"
 
     # Настройка loguru
     _logger.configure(
