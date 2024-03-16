@@ -52,7 +52,6 @@ async def get_data_from_wb(link_operation_wb: str,
     headers = {"Authorization": api_key, "content-Type": "application/json"}
     date_and_time_yestarday = (datetime.datetime.today() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
     api_url_yestarday = link_operation_wb+"?dateFrom="+date_and_time_yestarday
-    
     async with aiohttp.ClientSession() as client:
         async with client.get(api_url_yestarday, headers=headers) as wb_data:
             response_data_yestarday = await wb_data.json()

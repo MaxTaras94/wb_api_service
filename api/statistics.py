@@ -1,5 +1,5 @@
 from app.logger import logger
-from app.wb_monitoring.get_data_from_wb import get_data_from_wb
+from app.wb_monitoring.get_data_from_wb_new import get_data_from_wb
 from app.settings import settings
 import datetime
 import math
@@ -22,6 +22,7 @@ async def get_statistics(user_telegram_id: int,
                          session: AsyncSession = Depends(orm.get_session)
                          ) -> JSONResponse:
     
+    logger.info(f"Вызов метода get_statistics. Время {datetime.datetime.today().strftime("%d.%m.%Y %H:%M:%S")} Переданы параметры: user_telegram_id={user_telegram_id}; key_id={key_id}")
     statement = select(orm.WB.api_key).where(orm.WB.id == key_id,
                                              orm.WB.user_telegram_id == user_telegram_id)
     results = await session.execute(statement)
@@ -33,9 +34,9 @@ async def get_statistics(user_telegram_id: int,
                                                 date_and_time_yestarday,
                                                 0)
     sales_and_refunds: List[dict] = await get_data_from_wb(settings.salesurl, 
-                                                            api_key,
-                                                            date_and_time_yestarday,
-                                                            0)
+                                                           api_key,
+                                                           date_and_time_yestarday,
+                                                           0)
     try:
         response_data = [{
                       "orders": math.ceil(sum([1 for _ in orders if not _["isCancel"] and \
