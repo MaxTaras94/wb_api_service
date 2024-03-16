@@ -31,12 +31,10 @@ async def get_statistics(user_telegram_id: int,
     date_and_time_yestarday = (datetime.datetime.today() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
     orders: List[dict] = await get_data_from_wb(settings.ordersurl, 
                                                 api_key,
-                                                date_and_time_yestarday,
-                                                0)
+                                                date_and_time_yestarday)
     sales_and_refunds: List[dict] = await get_data_from_wb(settings.salesurl, 
                                                            api_key,
-                                                           date_and_time_yestarday,
-                                                           0)
+                                                           date_and_time_yestarday)
     try:
         response_data = [{
                       "orders": math.ceil(sum([1 for _ in orders if not _["isCancel"] and \
