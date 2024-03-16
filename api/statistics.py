@@ -22,7 +22,7 @@ async def get_statistics(user_telegram_id: int,
                          session: AsyncSession = Depends(orm.get_session)
                          ) -> JSONResponse:
     
-    logger.info(f"Вызов метода get_statistics. Время {datetime.datetime.today().strftime("%d.%m.%Y %H:%M:%S")} Переданы параметры: user_telegram_id={user_telegram_id}; key_id={key_id}")
+    logger.info(f"Вызов метода get_statistics. Время {datetime.datetime.today().strftime('%d.%m.%Y %H:%M:%S')} Переданы параметры: user_telegram_id={user_telegram_id}; key_id={key_id}")
     statement = select(orm.WB.api_key).where(orm.WB.id == key_id,
                                              orm.WB.user_telegram_id == user_telegram_id)
     results = await session.execute(statement)
