@@ -8,6 +8,7 @@ from app.settings import settings
 from app.send_requests_to_tg import send_message_with_photo
 from app.templates.templates import render_template
 import datetime
+import httpx
 import math
 from random import random, randint
 from typing import List, Tuple
@@ -38,10 +39,9 @@ async def get_all_warehouses(api_key: str) -> List[dict]:
     '''Функция возвращает список всех пользовательских складов
     '''
     headers = {"Authorization": api_key, "content-Type": "application/json"}
-    async with aiohttp.ClientSession() as client:
-        async with client.get(settings.warehouses, headers=headers) as warehouses:
-            warehouses_json = await warehouses.json()
-    return warehouses_json
+    async with httpx.AsyncClient(timeout=30) as client:
+        warehouses = await client.get(settings.warehouses, headers=headers)
+    return warehouses.json()
 
 async def get_data_from_wb(link_operation_wb: str,
                            api_key: str,
@@ -52,9 +52,9 @@ async def get_data_from_wb(link_operation_wb: str,
     headers = {"Authorization": api_key, "content-Type": "application/json"}
     date_and_time_yestarday = (datetime.datetime.today() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
     api_url_yestarday = link_operation_wb+"?dateFrom="+date_and_time_yestarday
-    async with aiohttp.ClientSession() as client:
-        async with client.get(api_url_yestarday, headers=headers) as wb_data:
-            response_data_yestarday = await wb_data.json()
+    async with httpx.AsyncClient(timeout=30) as client:
+       wb_data = await client.get(api_url_yestarday, headers=headers)
+    response_data_yestarday = wb_data.json()
     logger.info(f"В ф-ции get_data_from_wb\n response_data_yestarday = {response_data_yestarday}")
     await asyncio.sleep(randint(1,5))
     return response_data_yestarday
@@ -68,9 +68,9 @@ async def get_stocks_from_wb(link_operation_wb: str,
     headers = {"Authorization": api_key, "content-Type": "application/json"}
     date_and_time_yestarday = (datetime.datetime.today() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
     api_url_stocks = settings.stockurl+"?dateFrom="+date_and_time
-    async with aiohttp.ClientSession() as client:
-        async with client.get(api_url_stocks, headers=headers) as stocks:
-            response_stock = await stocks.json()
+    async with httpx.AsyncClient(timeout=30) as client:
+        stocks = await client.get(api_url_stocks, headers=headers)
+    response_stock = stocks.json()
     logger.info(f"В ф-ции get_stocks_from_wb\n response_stock = {response_stock}")
     return response_stock
 
@@ -103,9 +103,9 @@ async def generic_link_for_nmId_img(nmId: int) -> str:
             photo_url = f'https://basket-{N}.wb.ru/vol{nmId_str[0:4]}/part{nmId_str[0:6]}/{nmId_str}/images/big/1.webp'
         elif len(nmId_str) == 8:
             photo_url = f'https://basket-{N}.wb.ru/vol{nmId_str[0:3]}/part{nmId_str[0:5]}/{nmId_str}/images/big/1.webp'            
-        async with aiohttp.ClientSession() as client:
-            async with client.get(photo_url) as img_res:
-                status_code = img_res.status
+        async with httpx.AsyncClient(timeout=30) as client:
+            img_res = await client.get(photo_url)
+        status_code = img_res.status_code
         if status_code == 200:
             return photo_url
         else:
