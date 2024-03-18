@@ -29,7 +29,7 @@ async def check_user_is_subscriber_channel(tg_user_id: int) -> bool:
     '''
     url = f"https://api.telegram.org/bot{settings.telegram_bot_token}/getChatMember?chat_id=@xoxlov_maxim&user_id={str(tg_user_id)}"
     async with httpx.AsyncClient(timeout=30) as client:
-        subscribe = await client.get(url):
+        subscribe = await client.get(url)
     data = subscribe.json()
     if data['ok'] == False or data['result']['status'] == 'left':
         return False
