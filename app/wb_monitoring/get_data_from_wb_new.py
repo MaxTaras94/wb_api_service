@@ -1,5 +1,4 @@
 import asyncio
-import aiohttp
 from app.logger import logger
 from api.data_for_monitoring import OperationRegroupedDataResponse
 from api.notifications import update_time_last_in_wb, get_time_last_in_wb
@@ -119,9 +118,9 @@ async def get_last_time_operation(id_:int,
                                   ) -> datetime.datetime:
     '''Функция возвращает из БД время последней операции в WB 
     '''
-    async with aiohttp.ClientSession() as client:
-        async with client.get(f'{settings.server_host}/api/notifications/get_time_last_in_wb/?id_={id_}&wb_api_keys_id={id_wb_key}') as res:
-            time_last_operation = await res.json()
+    async with httpx.AsyncClient(timeout=30) as client:
+        res = await client.get(f'{settings.server_host}/api/notifications/get_time_last_in_wb/?id_={id_}&wb_api_keys_id={id_wb_key}')
+    time_last_operation = res.json()
     time_last_operation = datetime.datetime.fromisoformat(time_last_operation['data']) if time_last_operation['data'] is not None \
     else datetime.datetime.today() - datetime.timedelta(minutes=40)
     return time_last_operation
@@ -133,22 +132,22 @@ async def update_time_last_in_wb(id_operation: int,
                                  ) -> None:
     '''Функция обновляет данные в БД по последней операции
     '''
-    async with aiohttp.ClientSession() as client:
-            await client.post(f'{settings.server_host}/api/notifications/update_time_last_in_wb/',
-                               json={'id_':id_operation,
-                                           'wb_api_keys_id':id_wb_key,
-                                           'time_last_in':date_and_time_operation
-                                           }
-            )
+    async with httpx.AsyncClient(timeout=30) as client:
+        await client.post(f'{settings.server_host}/api/notifications/update_time_last_in_wb/',
+                           json={'id_':id_operation,
+                                       'wb_api_keys_id':id_wb_key,
+                                       'time_last_in':date_and_time_operation
+                               }
+                        )
 
 async def get_feedback_and_rating(nmId: int) -> tuple:
     '''Функция возвращает данные отзывы и рейтинг для артикула :nmId:
     '''
     api_url = f"https://card.wb.ru/cards/detail?curr=rub&dest=123585628&nm={nmId}" # ссыль для получения данных о кол-ве отзывов и рейтинге для nmId
     try:
-        async with aiohttp.ClientSession() as client:
-            async with client.get(api_url) as res:
-                response = await res.json()
+        async with httpx.AsyncClient(timeout=30) as client:
+            res = await client.get(api_url)
+        response = res.json()
         data = response["data"]["products"][0]
         return data["feedbacks"], data["reviewRating"]
     except:

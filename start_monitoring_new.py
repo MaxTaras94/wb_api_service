@@ -1,5 +1,4 @@
 import asyncio
-import aiohttp
 from api.data_for_monitoring import OperationDataListResponse, OperationRegroupedDataResponse
 from app.send_requests_to_tg import check_user_is_subscriber_channel
 from app.settings import settings
@@ -14,6 +13,7 @@ from app.wb_monitoring.get_data_from_wb_new import (
 from api.notifications import update_time_last_in_wb
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import datetime
+import httpx
 import itertools
 from typing import List, Tuple
 
@@ -22,9 +22,9 @@ async def is_checking_subscription() -> bool:
     '''Функция возвращает из БД False, если проверка подписки не активна, иначе вернёт True
     '''
     try:
-        async with aiohttp.ClientSession() as client:
-            async with client.get(settings.server_host+"/api/botsettings/get_status_check_subscription/") as check_subscription:
-                data = await check_subscription.json()
+        async with httpx.AsyncClient(timeout=30) as client:
+            check_subscription = await client.get(settings.server_host+"/api/botsettings/get_status_check_subscription/")
+        data =  check_subscription.json()
         return data['is_checking']
     except Exception as e:
         return {'status': 'error', 'text_error': e, 'is_checking': None}
@@ -33,12 +33,12 @@ async def is_checking_subscription() -> bool:
 async def get_subscribers(checking_subscription: bool) -> Tuple[OperationRegroupedDataResponse]:
     '''Функция возвращает список словарей пользователей, подписанных на получение уведомлений
     '''
-    async with aiohttp.ClientSession() as client:      
-        async with client.post(f"{settings.server_host}/api/monitoring/get_data_new/", json={'operations': [1,2,3], 
+    async with httpx.AsyncClient(timeout=30) as client:     
+        response = await client.post(f"{settings.server_host}/api/monitoring/get_data_new/", json={'operations': [1,2,3], 
                                                                                              'is_checking_subscription': checking_subscription
                                                                                              }
-                                                                                             ) as response:
-            users_subscribed_to_opearations: OperationRegroupedDataResponse = await response.json()
+                                                                                             )
+    users_subscribed_to_opearations: OperationRegroupedDataResponse = response.json()
     return users_subscribed_to_opearations['data']
 
 async def process_get_data(url_for_req: str,
