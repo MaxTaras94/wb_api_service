@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     salesurl: str
     stockurl: str
     warehouses: str
+    warehouses_stocks: str
     telegram_bot_token: str
     sendmsgtg: str
     debug: bool

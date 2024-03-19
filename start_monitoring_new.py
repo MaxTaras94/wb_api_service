@@ -113,7 +113,7 @@ async def start_checking():
 if __name__ == "__main__":
     try:
         scheduler = AsyncIOScheduler()
-        scheduler.add_job(start_checking, 'interval', minutes=30)
+        scheduler.add_job(start_checking, 'interval', minutes=3)
         scheduler.start()
     except Exception as e:
         logger.error(f'Ошибка в блоке __name__\nТекст ошибки: {e}')

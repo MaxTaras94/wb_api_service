@@ -10,7 +10,7 @@ import datetime
 import httpx
 import math
 from random import random, randint
-from typing import List, Tuple
+from typing import Dict, List, Tuple
 import urllib.request
 from urllib.parse import quote
 
@@ -22,6 +22,22 @@ def get_all_barcodes(operations: List[dict]) -> List[str]:
     '''
     return list(set([_["barcode"] for _ in operations]))
 
+async def dynamics_operations_on_barcodes(operations: List[dict],
+                                          list_of_warehouses: List[dict],
+                                          api_key: str
+                                          ) -> Dict[str, int]:
+    all_barcodes = get_all_barcodes(operations)
+    for num, warehouse in enumerate(list_of_warehouses):
+        list_of_warehouses[num]['stocks'] = {item['sku']: item['amount'] for item in await get_all_warehouse_stocks(api_key, warehouse['id'], all_barcodes)['stocks']}
+    barcodes_and_count_of_operations = {}
+    for barcode in all_barcodes:
+        barcodes_and_count_of_operations[barcode] = sum([1 for _ in operations if _['barcode'] == barcode])
+    for o in operations:
+        o['dynamics_operations_for_last_7_days'] = barcodes_and_count_of_operations[o['barcode']]
+        o['stocks'] = {}
+        for num, stock_warehouse in enumerate(list_of_warehouses):
+            o['stocks'][stock_warehouse['name']] = {"stock": stock_warehouse['stocks'][o['barcode']]} #TODO закончил здесь 19.03.2024 0:13, не проверил работает ли, нужно перепроверить
+    
 
 def operations_sorter(operations: List[dict]) -> List[dict]:
     '''Функция на вход получает данные из API WB о заказах/возвратах/продажах
@@ -34,14 +50,31 @@ def operations_sorter(operations: List[dict]) -> List[dict]:
         parsed_operations.append(operation)
     return sorted(parsed_operations, key=lambda d: d["parsed_date"])
 
+async def get_all_warehouse_stocks(api_key: str,
+                                   warehouseId: int,
+                                   barcodes: List[str]
+                                   ) -> List[dict]:
+    '''Функция возвращает остатки товаров со склада продавца по его warehouseId для переданных barcodes
+    '''
+    headers = {"Authorization": api_key, "content-Type": "application/json"}
+    async with httpx.AsyncClient(timeout=30) as client:
+        warehouse_stocks = await client.post(settings.warehouses_stocks+'/'+str(warehouseId), headers=headers, json={'skus':barcodes})
+    return warehouse_stocks
+
+
 async def get_all_warehouses(api_key: str) -> List[dict]:
     '''Функция возвращает список всех пользовательских складов
     '''
     headers = {"Authorization": api_key, "content-Type": "application/json"}
     async with httpx.AsyncClient(timeout=30) as client:
         warehouses = await client.get(settings.warehouses, headers=headers)
-    return warehouses.json()
-
+    if warehouses.status_code == 200:
+        return warehouses.json()
+    elif warehouses.status_code == 403:
+        return ""
+    else:
+        return "error"
+        
 async def get_data_from_wb(link_operation_wb: str,
                            api_key: str,
                            date_and_time: str
@@ -49,14 +82,17 @@ async def get_data_from_wb(link_operation_wb: str,
     '''Функция возвращает данные о заказах/продажах/возвратах из API WB 
     '''
     headers = {"Authorization": api_key, "content-Type": "application/json"}
-    date_and_time_yestarday = (datetime.datetime.today() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
+    date_and_time_yestarday = (datetime.datetime.today() - datetime.timedelta(days=8)).strftime("%Y-%m-%d")
     api_url_yestarday = link_operation_wb+"?dateFrom="+date_and_time_yestarday
     async with httpx.AsyncClient(timeout=30) as client:
        wb_data = await client.get(api_url_yestarday, headers=headers)
-    response_data_yestarday = wb_data.json()
-    logger.info(f"В ф-ции get_data_from_wb\n response_data_yestarday = {response_data_yestarday}")
-    await asyncio.sleep(randint(1,5))
-    return response_data_yestarday
+    operations = wb_data.json()
+    all_warehouses = await get_all_warehouses(api_key)
+    if all_warehouses == "" or "error":    
+        await asyncio.sleep(randint(1,5))
+        return operations
+    else:
+        dynamics_operations_on_barcodes(operations, all_warehouses, api_key)
 
 async def get_stocks_from_wb(link_operation_wb: str,
                              api_key: str,
@@ -70,7 +106,6 @@ async def get_stocks_from_wb(link_operation_wb: str,
     async with httpx.AsyncClient(timeout=30) as client:
         stocks = await client.get(api_url_stocks, headers=headers)
     response_stock = stocks.json()
-    logger.info(f"В ф-ции get_stocks_from_wb\n response_stock = {response_stock}")
     return response_stock
 
 async def sender_messeges_to_tg(data_for_msg: dict,
@@ -166,7 +201,6 @@ async def parsing_order_data(orders_from_wb: List[List[dict]],
     orders = operations_sorter(orders_from_wb[0])
     time_last_order_in_wb = time_last_order_in_wb_from_db
     try:
-        logger.info(f"В ф-ции parsing_order_data\n subscription = {subscription} \n orders = {orders}")
         for order in orders:
             date_and_time_order = order['parsed_date']
             if not order["isCancel"]:  
@@ -232,7 +266,6 @@ async def parsing_sales_refunds_data(operations_from_wb: List[List[dict]],
     time_last_sale_in_wb = time_last_sale_in_wb_from_db
     time_last_refund_in_wb = time_last_refund_in_wb_from_db
     try:
-        logger.info(f"В ф-ции parsing_sales_refunds_data \n subscription = {subscription} \n operations = {operations}")
         for operation in operations:
             date_and_time_operation = operation["parsed_date"]
             if date_and_time_operation.date() >= date_today.date():
