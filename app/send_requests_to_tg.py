@@ -10,11 +10,10 @@ import httpx
 
 
 
-async def send_message_with_photo(
-                                   tg_user_id: int,
-                                   text_message: str,
-                                   link_img: str
-                                  ) -> None:
+async def send_message_to_tg(tg_user_id: int,
+                             text_message: str,
+                             link_img: str
+                             ) -> None:
     if link_img != "":
         url = f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendPhoto?chat_id={str(tg_user_id)}&photo={link_img}&caption={text_message}&parse_mode=HTML"
     else:

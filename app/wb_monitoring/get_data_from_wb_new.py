@@ -4,7 +4,7 @@ from api.data_for_monitoring import OperationRegroupedDataResponse
 from api.notifications import update_time_last_in_wb, get_time_last_in_wb
 from app.digit_separator import digit_separator
 from app.settings import settings
-from app.send_requests_to_tg import send_message_with_photo
+from app.send_requests_to_tg import send_message_to_tg
 from app.templates.templates import render_template
 import datetime
 import httpx
@@ -13,7 +13,6 @@ from random import random, randint
 from typing import Dict, List, Tuple
 import urllib.request
 from urllib.parse import quote
-
 
 
 
@@ -26,18 +25,26 @@ async def dynamics_operations_on_barcodes(operations: List[dict],
                                           list_of_warehouses: List[dict],
                                           api_key: str
                                           ) -> Dict[str, int]:
+    '''Функция обогащает данные об операциях данными о статистике этих самых операций за последие 7 ней + данными об FBS остатках, если селлер работает по такой модели
+    '''
     all_barcodes = get_all_barcodes(operations)
     for num, warehouse in enumerate(list_of_warehouses):
-        list_of_warehouses[num]['stocks'] = {item['sku']: item['amount'] for item in await get_all_warehouse_stocks(api_key, warehouse['id'], all_barcodes)['stocks']}
+        all_warehouse_stocks = await get_all_warehouse_stocks(api_key, warehouse['id'], all_barcodes)
+        list_of_warehouses[num]['stocks'] = {item['sku']: item['amount'] for item in all_warehouse_stocks['stocks']}
     barcodes_and_count_of_operations = {}
     for barcode in all_barcodes:
-        barcodes_and_count_of_operations[barcode] = sum([1 for _ in operations if _['barcode'] == barcode])
+        barcodes_and_count_of_operations[barcode] = math.ceil(sum([1 for _ in operations if _['barcode'] == barcode]) / 7)
     for o in operations:
-        o['dynamics_operations_for_last_7_days'] = barcodes_and_count_of_operations[o['barcode']]
-        o['stocks'] = {}
+        o['stocks_on_warehouses'] = []
         for num, stock_warehouse in enumerate(list_of_warehouses):
-            o['stocks'][stock_warehouse['name']] = {"stock": stock_warehouse['stocks'][o['barcode']]} #TODO закончил здесь 19.03.2024 0:13, не проверил работает ли, нужно перепроверить
-    
+            on_count_days = stock_warehouse['stocks'][o['barcode']] / barcodes_and_count_of_operations[o['barcode']]
+            on_count_days_floor = math.floor(on_count_days) if on_count_days > 1 else 0
+            o['stocks_on_warehouses'].append({"warehouse_name": stock_warehouse['name'],
+                                              "stock": stock_warehouse['stocks'][o['barcode']],
+                                              "on_count_days": on_count_days_floor
+                                             })
+            o["count_of_operations"] = barcodes_and_count_of_operations[o['barcode']]
+    return operations
 
 def operations_sorter(operations: List[dict]) -> List[dict]:
     '''Функция на вход получает данные из API WB о заказах/возвратах/продажах
@@ -59,7 +66,7 @@ async def get_all_warehouse_stocks(api_key: str,
     headers = {"Authorization": api_key, "content-Type": "application/json"}
     async with httpx.AsyncClient(timeout=30) as client:
         warehouse_stocks = await client.post(settings.warehouses_stocks+'/'+str(warehouseId), headers=headers, json={'skus':barcodes})
-    return warehouse_stocks
+    return warehouse_stocks.json()
 
 
 async def get_all_warehouses(api_key: str) -> List[dict]:
@@ -88,11 +95,11 @@ async def get_data_from_wb(link_operation_wb: str,
        wb_data = await client.get(api_url_yestarday, headers=headers)
     operations = wb_data.json()
     all_warehouses = await get_all_warehouses(api_key)
-    if all_warehouses == "" or "error":    
-        await asyncio.sleep(randint(1,5))
+    if all_warehouses == "" or all_warehouses == "error":    
         return operations
     else:
-        dynamics_operations_on_barcodes(operations, all_warehouses, api_key)
+        upgrade_operations = await dynamics_operations_on_barcodes(operations, all_warehouses, api_key) #обогащаем операции данными об остатках со складов селлера
+        return upgrade_operations
 
 async def get_stocks_from_wb(link_operation_wb: str,
                              api_key: str,
@@ -106,23 +113,46 @@ async def get_stocks_from_wb(link_operation_wb: str,
     async with httpx.AsyncClient(timeout=30) as client:
         stocks = await client.get(api_url_stocks, headers=headers)
     response_stock = stocks.json()
-    return response_stock
+    if isinstance(response_stock, list):
+        return response_stock
+    else:
+        logger.error(f"Ошибка при получении остатков: {response_stock}")
+        return {}
+        
+        
+async def update_status_subscribe_in_db(tg_user_id: int,
+                                        is_subscriber: bool
+                                        ) -> None:
+    async with httpx.AsyncClient(timeout=30) as client:
+        await client.post(settings.server_host + f"/api/checksubscribe/update_status_subscription/",
+                          json={'tg_user_id':tg_user_id,
+                                'is_subscriber': is_subscriber
+                               }
+                          ) 
 
-async def sender_messeges_to_tg(data_for_msg: dict,
-                                subscription: OperationRegroupedDataResponse,
-                                type_operation: str = None
-                                ) -> None:   
+async def sender_messeges_to_telegram(data_for_msg: dict,
+                                      subscription: OperationRegroupedDataResponse,
+                                      type_operation: str = None
+                                      ) -> None:   
     name_template = 'msg_with_orders_for_client.j2' if type_operation == "1" else "msg_with_sales_and_refunds_for_client.j2"
     telegram_ids = list(subscription['users'][type_operation]['telegram_ids'].keys())
     for num, tg_user_id in enumerate(telegram_ids):
         is_subscriber = subscription['users'][type_operation]['telegram_ids'][tg_user_id]['is_subscriber']
+        async with httpx.AsyncClient(timeout=30) as client:
+            data = await client.get(settings.server_host + f"/api/checksubscribe/get_current_status/{tg_user_id}")
+        is_subscriber_db = data.json()
         if is_subscriber or is_subscriber is None:
             name_key = subscription['users'][type_operation]['names_wb_key'][num]
             data_for_msg['name_key'] = name_key if name_key is not None else subscription['api_key'][:10]+"..."+subscription['api_key'][-10:]
-            text_msg = render_template(name_template, data={'data':data_for_msg, 'quote':quote})
-            await send_message_with_photo(tg_user_id, text_msg, data_for_msg['img'])
+            text_msg = render_template(name_template, data={'data':data_for_msg, 'quote':quote, 'len': len})
+            logger.info(f"В ф-ции sender_messeges_to_telegram. text_msg={text_msg}")
+            await send_message_to_tg(tg_user_id, text_msg, data_for_msg['img'])
+            if not is_subscriber_db["is_subscriber"]:
+                await update_status_subscribe_in_db(tg_user_id, True)
         else:
-            pass #TODO реализовать отправку сообщения, что т.к. отписан от канала - оповещения не может получать
+            if is_subscriber_db["is_subscriber"]:
+                await send_message_to_tg(tg_user_id, render_template("no_send_alert_of_new_operations.j2"), "")
+                await update_status_subscribe_in_db(tg_user_id, False) 
     await asyncio.sleep(0.1)
 
 async def generic_link_for_nmId_img(nmId: int) -> str:
@@ -172,8 +202,8 @@ async def update_time_last_in_wb(id_operation: int,
                            json={'id_':id_operation,
                                        'wb_api_keys_id':id_wb_key,
                                        'time_last_in':date_and_time_operation
-                               }
-                        )
+                                }
+                         )
 
 async def get_feedback_and_rating(nmId: int) -> tuple:
     '''Функция возвращает данные отзывы и рейтинг для артикула :nmId:
@@ -208,20 +238,37 @@ async def parsing_order_data(orders_from_wb: List[List[dict]],
                     time_last_order_in_wb = date_and_time_order
                     feedbacks, reviewRating = await get_feedback_and_rating(order["nmId"])
                     img_link = await generic_link_for_nmId_img(order["nmId"])
+                    stocks_on_warehouses = order.get('stocks_on_warehouses', [])
+                    in_way_to_client = 0
+                    in_way_from_client = 0
+                    if isinstance(stocks, list):
+                        for stock in stocks:
+                            if stock["nmId"] == order["nmId"] and stock["quantityFull"] > 0:
+                                in_way_to_client += stock["inWayToClient"]
+                                in_way_from_client += stock["inWayFromClient"]
+                                if stock["quantityFull"] < order["count_of_operations"]:
+                                    on_count_days = 0
+                                else:
+                                    on_count_days = math.floor(stock["quantityFull"] / order["count_of_operations"])
+                                stocks_on_warehouses.append({"warehouse_name": stock["warehouseName"],
+                                                              "stock": stock["quantityFull"],
+                                                              "on_count_days": on_count_days
+                                                             })
                     data_for_msg = {
                         "date_and_time_order": date_and_time_order.strftime("%d.%m.%Y %H:%M:%S"),
-                        "number_orders_with_this_nmId_today": digit_separator(math.ceil(sum([1 for _ in orders if _["nmId"] == order["nmId"] and \
-                        _["parsed_date"] >= date_today and _["parsed_date"] <= date_and_time_order]))),
-                        "number_orders_with_this_nmId_yesterday": digit_separator(math.ceil(sum([1 for _ in orders if _["nmId"] == order["nmId"] and \
-                        _["parsed_date"] <= date_today]))),
-                        "total_count_orders_today": digit_separator(math.ceil(sum([1 for _ in orders if _["parsed_date"] >= date_today and \
-                        _["parsed_date"] <= date_and_time_order]))),
+                        "number_orders_with_this_nmId_today": digit_separator(math.ceil(sum([1 for _ in orders if all([_["nmId"] == order["nmId"], \
+                        _["parsed_date"].date() == date_today.date(), _["parsed_date"].time() <= date_and_time_order.time()])]))),
+                        "number_orders_with_this_nmId_yesterday": digit_separator(math.ceil(sum([1 for _ in orders if all([_["nmId"] == order["nmId"], \
+                        _["parsed_date"].date().day == (date_today.date().day - 1), _["parsed_date"].date().day > (date_today.date().day - 2)])]))),
+                        "total_count_orders_today": digit_separator(math.ceil(sum([1 for _ in orders if _["parsed_date"].date() == date_today.date() \
+                        and _["parsed_date"].time() <= date_and_time_order.time()]))),
                         "total_sum_orders_today": digit_separator(math.ceil(sum([_["finishedPrice"] for _ in orders if \
-                        _["parsed_date"] >= date_today and _["parsed_date"] <= date_and_time_order]))),
+                        _["parsed_date"].date() == date_today.date() and _["parsed_date"].time() <= date_and_time_order.time()]))),
                         "total_sum_orders_with_this_nmId_today": digit_separator(math.ceil(sum([_["finishedPrice"] for _ in orders if \
-                        _["nmId"] == order["nmId"] and _["parsed_date"] >= date_today and _["parsed_date"] <= date_and_time_order]))),
+                        all([_["nmId"] == order["nmId"], _["parsed_date"].date() == date_today.date(), _["parsed_date"].time() <= date_and_time_order.time()])]))),
                         "total_sum_orders_with_this_nmId_yesterday": digit_separator(math.ceil(sum([_["finishedPrice"] for _ in orders if \
-                        _["nmId"] == order["nmId"] and _["parsed_date"] <= date_today]))),
+                        all([_["nmId"] == order["nmId"], _["parsed_date"].date().day == (date_today.date().day - 1), _["parsed_date"].date().day > \
+                        (date_today.date().day - 2)])]))),
                         "spp_percent": order["spp"],
                         "spp_sum": digit_separator(math.ceil((order["spp"]*order["priceWithDisc"])/100)),
                         "img": img_link,
@@ -234,17 +281,15 @@ async def parsing_order_data(orders_from_wb: List[List[dict]],
                         "typeOperation": "Заказ",
                         "feedbacks": feedbacks,
                         "reviewRating": reviewRating,
-                        "warehouseName": f"{order['warehouseName']} → {order['regionName']}"
+                        "warehouseName": order['warehouseName'] + " → " + order['regionName'],
+                        "stocks_on_warehouses": stocks_on_warehouses,
+                        "inWayToClient": digit_separator(in_way_to_client),
+                        "inWayFromClient": digit_separator(in_way_from_client)
                     }    
                     try:
-                        data_for_msg['inWayToClient'] = digit_separator(sum([_['inWayToClient'] for _ in stocks if _["nmId"] == order["nmId"]]))
-                        data_for_msg['inWayFromClient'] = digit_separator((sum([_['inWayFromClient'] for _ in stocks if _["nmId"] == order["nmId"]])))
-                        data_for_msg['quantity'] = digit_separator(sum([_['quantity'] for _ in stocks if _["nmId"] == order["nmId"]]))
-                    except TypeError:
-                        data_for_msg['inWayToClient'] = "?"
-                        data_for_msg['inWayFromClient'] = "?"
-                        data_for_msg['quantity'] = "?"
-                    await sender_messeges_to_tg(data_for_msg, subscription, type_operation = '1')
+                        await sender_messeges_to_telegram(data_for_msg, subscription, type_operation = '1')
+                    except Exception as e:
+                        logger.error(f"Ошибка при отправке сообщения в функции parsing_order_data: {e}")
         for id_wb_key in subscription['users']['1']['ids_wb_key']:           
             await update_time_last_in_wb(1, id_wb_key, time_last_order_in_wb.isoformat())
     except Exception as e:
@@ -255,7 +300,7 @@ async def parsing_sales_refunds_data(operations_from_wb: List[List[dict]],
                                      subscription: OperationRegroupedDataResponse
                                      ) -> None:
     '''Функция на вход получает ответ от API WB о продажах или возвратах.
-       Возвращает распаршенный ответ в виде List[List[dict]]
+       Превращает в словарь с нужными полями, передает словарь в рендер jinja2 и после ф-цию отправки соощбений в бота тг
     '''
     date_today_str = datetime.datetime.today().strftime("%Y-%m-%d")
     date_today = datetime.datetime.strptime(date_today_str, "%Y-%m-%d")
@@ -275,22 +320,40 @@ async def parsing_sales_refunds_data(operations_from_wb: List[List[dict]],
                     img_link = await generic_link_for_nmId_img(operation["nmId"])
                     time_last_sale_in_wb = date_and_time_operation if operation["saleID"][0] == "S" else time_last_sale_in_wb_from_db
                     time_last_refund_in_wb = date_and_time_operation if operation["saleID"][0] == "R" else time_last_refund_in_wb_from_db
+                    stocks_on_warehouses = operation.get('stocks_on_warehouses', [])
+                    in_way_to_client = 0
+                    in_way_from_client = 0
+                    if isinstance(stocks, list):
+                        for stock in stocks:
+                            if stock["nmId"] == operation["nmId"] and stock["quantityFull"] > 0:
+                                in_way_to_client += stock["inWayToClient"]
+                                in_way_from_client += stock["inWayFromClient"]
+                                if stock["quantityFull"] < operation["count_of_operations"]:
+                                    on_count_days = 0
+                                else:
+                                    on_count_days = math.floor(stock["quantityFull"] / operation["count_of_operations"])
+                                stocks_on_warehouses.append({"warehouse_name": stock["warehouseName"],
+                                                              "stock": stock["quantityFull"],
+                                                              "on_count_days": on_count_days
+                                                             })
                     data_for_msg = {
                         "date_and_time_operation": date_and_time_operation.strftime("%d.%m.%Y %H:%M:%S"),
                         "number_operations_with_this_nmId_today": digit_separator(math.ceil(sum([1 for _ in operations if _["nmId"] == operation["nmId"] \
-                        and all([_["saleID"][0] == operation["saleID"][0], _["parsed_date"] <= date_and_time_operation,\
-                        _["parsed_date"] >= date_today])]))),
+                        and all([_["saleID"][0] == operation["saleID"][0], _["parsed_date"].time() <= date_and_time_operation.time(),\
+                        _["parsed_date"].date() == date_today.date()])]))),
                         "total_sum_operations_today": digit_separator(math.ceil(sum([_["finishedPrice"] for _ in operations if all([_["saleID"][0] == operation["saleID"][0],\
-                        _["parsed_date"] <= date_and_time_operation, _["parsed_date"] >= date_today])]))),
+                        _["parsed_date"].time() <= date_and_time_operation.time(), _["parsed_date"].date() == date_today.date()])]))),
                         "total_sum_operations_with_this_nmId_today": digit_separator(math.ceil(sum([_["finishedPrice"] for _ in operations \
                         if all([_["nmId"] == operation["nmId"], _["saleID"][0] == operation["saleID"][0], \
-                        _["parsed_date"] <= date_and_time_operation, _["parsed_date"] >= date_today])]))),
+                        _["parsed_date"].time() <= date_and_time_operation.time(), _["parsed_date"].date() == date_today.date()])]))),
                         "total_count_operations_today": digit_separator(math.ceil(sum([1 for _ in operations if all([_["saleID"][0] == operation["saleID"][0],\
-                        _["parsed_date"] <= date_and_time_operation, _["parsed_date"] >= date_today])]))),
-                        "number_operations_with_this_nmId_yesterday": digit_separator(math.ceil(sum([1 for _ in operations if _["nmId"] == operation["nmId"] \
-                        and _["saleID"][0] == operation["saleID"][0]]))),
+                        _["parsed_date"].time() <= date_and_time_operation.time(), _["parsed_date"].date() == date_today.date()])]))),
+                        "number_operations_with_this_nmId_yesterday": digit_separator(math.ceil(sum([1 for _ in operations if all([_["nmId"] == operation["nmId"], \
+                        _["saleID"][0] == operation["saleID"][0], _["parsed_date"].date().day == (date_today.date().day - 1),\
+                        _["parsed_date"].date().day > (date_today.date().day - 2)])]))),
                         "total_sum_operations_with_this_nmId_yesterday": digit_separator(math.ceil(sum([_["finishedPrice"] for _ in operations \
-                        if operation["nmId"] == _["nmId"] and _["saleID"][0] == operation["saleID"][0]]))),
+                        if all([operation["nmId"] == _["nmId"], _["saleID"][0] == operation["saleID"][0], _["parsed_date"].date().day == (date_today.date().day - 1),\
+                        _["parsed_date"].date().day > (date_today.date().day - 2)])]))),
                         "spp_percent": operation["spp"],
                         "spp_sum": digit_separator(math.ceil((operation["spp"]*operation["priceWithDisc"])/100)),
                         "img": img_link,
@@ -303,20 +366,18 @@ async def parsing_sales_refunds_data(operations_from_wb: List[List[dict]],
                         "typeOperation": "Продажа 💰" if operation["saleID"][0] == "S" else "Возврат ↩️",
                         "feedbacks": feedbacks,
                         "reviewRating": reviewRating,
-                        "warehouseName": operation["warehouseName"] +" → "+operation["regionName"]
+                        "warehouseName": operation["warehouseName"] + " → " + operation["regionName"],
+                        "stocks_on_warehouses": stocks_on_warehouses,
+                        "inWayToClient": digit_separator(in_way_to_client),
+                        "inWayFromClient": digit_separator(in_way_from_client)
                     }    
                     try:
-                        data_for_msg['inWayToClient'] = digit_separator(sum([_['inWayToClient'] for _ in stocks if _["nmId"] == operation["nmId"]]))
-                        data_for_msg['inWayFromClient'] = digit_separator(sum([_['inWayFromClient'] for _ in stocks if _["nmId"] == operation["nmId"]]))
-                        data_for_msg['quantity'] = digit_separator(sum([_['quantity'] for _ in stocks if _["nmId"] == operation["nmId"]]))
-                    except TypeError:
-                        data_for_msg['inWayToClient'] = "?"
-                        data_for_msg['inWayFromClient'] = "?"
-                        data_for_msg['quantity'] = "?"
-                    if data_for_msg["typeOperation"] == "Продажа 💰":
-                        await sender_messeges_to_tg(data_for_msg, subscription, type_operation = '2')
-                    else:
-                        await sender_messeges_to_tg(data_for_msg, subscription, type_operation = '3')
+                        if data_for_msg["typeOperation"] == "Продажа 💰":
+                            await sender_messeges_to_telegram(data_for_msg, subscription, type_operation = '2')
+                        else:
+                            await sender_messeges_to_telegram(data_for_msg, subscription, type_operation = '3')
+                    except Exception as e:
+                        logger.error(f"Ошибка при отправке сообщения в функции parsing_sales_refunds_data: {e}")
         for id_wb_key in subscription['users']['2']['ids_wb_key']:           
             await update_time_last_in_wb(2, id_wb_key, time_last_sale_in_wb.isoformat())
         for id_wb_key in subscription['users']['3']['ids_wb_key']:   

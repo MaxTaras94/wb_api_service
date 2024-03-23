@@ -6,6 +6,12 @@ CREATE TABLE Users (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;    
 );
 
+CREATE TABLE check_subscribe (
+	id SERIAL PRIMARY KEY,
+	user_telegram_id BigInt REFERENCES Users(telegram_id) ON DELETE CASCADE,
+	is_subscriber BOOLEAN DEFAULT true,
+	
+);
 CREATE TABLE WB_api_keys (
     id SERIAL PRIMARY KEY,
 	name_key VARCHAR(500),  
@@ -60,8 +66,24 @@ BEGIN
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
+------------
+Чтобы автоматически создавать записи в таблице check_subscribe при регистрации в боте новых пользователей, 
+будем использовать триггер или хранимую процедуру в нашей базе данных.
+CREATE OR REPLACE FUNCTION add_new_user_to_check_subscribe()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO check_subscribe (user_telegram_id)
+  VALUES (NEW.telegram_id);
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
 
--- Создание триггера
+
+-- Создание триггеров
+CREATE TRIGGER insert_user_to_check_subscribe
+AFTER INSERT ON Users
+FOR EACH ROW
+EXECUTE FUNCTION add_new_user_to_check_subscribe();
 CREATE TRIGGER trigger_add_default_notification
 AFTER INSERT ON WB_api_keys
 FOR EACH ROW EXECUTE FUNCTION add_default_notification();

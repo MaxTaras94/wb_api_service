@@ -4,7 +4,6 @@ from app.send_requests_to_tg import check_user_is_subscriber_channel
 from app.settings import settings
 from app.logger import logger
 from app.wb_monitoring.get_data_from_wb_new import (
-        get_all_barcodes,
         get_data_from_wb,
         get_stocks_from_wb,
         parsing_order_data,
@@ -52,17 +51,15 @@ async def process_get_data(url_for_req: str,
                                                       subscription['api_key'],                                                
                                                       date_today
                                                       )
-    try:
-        all_barcodes: List[str] = get_all_barcodes(data_from_wb)
-    except Exception as e:
-        logger.error(e)                 
-    if 'orders' in url_for_req:
-        logger.info(f"в ф-ции process_get_data, url_for_req = {url_for_req}. Перехожу  ф-цию parsing_order_data")
-        parsing_data = await parsing_order_data([data_from_wb, stocks_wb], subscription)
+    if isinstance(data_from_wb, list):
+        if 'orders' in url_for_req:
+            parsing_data = await parsing_order_data([data_from_wb, stocks_wb], subscription)
+        else:
+            parsing_data = await parsing_sales_refunds_data([data_from_wb, stocks_wb], subscription)
     else:
-        logger.info(f"в ф-ции process_get_data, url_for_req = {url_for_req}. Перехожу  ф-цию parsing_sales_refunds_data")
-        parsing_data = await parsing_sales_refunds_data([data_from_wb, stocks_wb], subscription)
-
+        logger.error(f"Ошибка при получении данных о {url_for_req.split('/')[-1]}: {data_from_wb}")
+        
+        
 def create_task_list(stocks_wb: List[dict],
                      subscription: OperationRegroupedDataResponse,
                      date_today: str) -> list:
@@ -84,23 +81,40 @@ def create_task_list(stocks_wb: List[dict],
     tasks.append(task)
     return tasks
 
+async def try_to_get_stocks(subscription: OperationRegroupedDataResponse,
+                            date_today: str
+                            ) -> List[dict]:
+    '''Функция для получения остатков со складов ВБ. Она нужна для повторения попыток получить остатки, если с первого раза ВБ вернул ошибку
+    '''
+    count_try = 4
+    num = 0
+    while num <= count_try:
+        stocks_wb: List[dict] = await get_stocks_from_wb(settings.stockurl, subscription['api_key'], date_today)
+        if isinstance(stocks_wb, dict):
+            num += 1
+            await asyncio.sleep(10)
+            continue
+        else:
+            break
+    return stocks_wb
+    
 async def check_operations(date_today: str):
     
     checking_subscription: bool = await is_checking_subscription()
     subscribers: OperationRegroupedDataResponse = await get_subscribers(checking_subscription)
     tasks = []
-    logger.info(f"subscribers = {subscribers}")
-    logger.info(f"checking_subscription = {checking_subscription}")
     for subscription in subscribers:
         if checking_subscription:
             user_is_subscriber_channel = list(itertools.chain.from_iterable([[subscription['users'][key]['telegram_ids'][k]['is_subscriber'] for k in \
             subscription['users'][key]['telegram_ids'].keys()] for key in subscription['users'].keys()])) #получаем список значений по ключу is_subscriber для каждого tg id из списка
             if any(user_is_subscriber_channel): #проверяем есть ли пользователи подписанные на канал
+                # stocks_wb: List[dict] = await try_to_get_stocks(subscription['api_key'], date_today)
                 stocks_wb: List[dict] = await get_stocks_from_wb(settings.stockurl, subscription['api_key'], date_today)
                 tasks.extend(create_task_list(stocks_wb, subscription, date_today))
             else:
                 continue
         else:
+            # stocks_wb: List[dict] = await try_to_get_stocks(subscription['api_key'], date_today)
             stocks_wb: List[dict] = await get_stocks_from_wb(settings.stockurl, subscription['api_key'], date_today)
             tasks.extend(create_task_list(stocks_wb, subscription, date_today))
     await asyncio.gather(*tasks, return_exceptions=True)
@@ -113,7 +127,7 @@ async def start_checking():
 if __name__ == "__main__":
     try:
         scheduler = AsyncIOScheduler()
-        scheduler.add_job(start_checking, 'interval', minutes=3)
+        scheduler.add_job(start_checking, 'interval', minutes=10)
         scheduler.start()
     except Exception as e:
         logger.error(f'Ошибка в блоке __name__\nТекст ошибки: {e}')
