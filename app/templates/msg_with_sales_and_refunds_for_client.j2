@@ -20,7 +20,9 @@
 👇<b>Остатки на складах</b><br><br>
 {% if len(data['stocks_on_warehouses']) != 0 %}
 {% for warehouse in data['stocks_on_warehouses'] %}
+{% if warehouse['stock'] !=0 %}
 ▶️ {{warehouse['warehouse_name']}}: <b>{{warehouse['stock']}} шт.</b> хватит на <b>{{warehouse['on_count_days']}} дн</b><br>
+{% endif %}
 {% endfor %}
 {% else %}
 ▶️ <b>Не удалось получить данные</b><br>

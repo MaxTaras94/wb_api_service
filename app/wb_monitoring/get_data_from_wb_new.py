@@ -75,12 +75,10 @@ async def get_all_warehouses(api_key: str) -> List[dict]:
     headers = {"Authorization": api_key, "content-Type": "application/json"}
     async with httpx.AsyncClient(timeout=30) as client:
         warehouses = await client.get(settings.warehouses, headers=headers)
-    if warehouses.status_code == 200:
-        return warehouses.json()
-    elif warehouses.status_code == 403:
-        return ""
-    else:
+    if warehouses.status_code != 200:        
         return "error"
+    else:
+        return return warehouses.json()
         
 async def get_data_from_wb(link_operation_wb: str,
                            api_key: str,
@@ -95,7 +93,7 @@ async def get_data_from_wb(link_operation_wb: str,
        wb_data = await client.get(api_url_yestarday, headers=headers)
     operations = wb_data.json()
     all_warehouses = await get_all_warehouses(api_key)
-    if all_warehouses == "" or all_warehouses == "error":    
+    if all_warehouses == "error":    
         return operations
     else:
         upgrade_operations = await dynamics_operations_on_barcodes(operations, all_warehouses, api_key) #обогащаем операции данными об остатках со складов селлера
