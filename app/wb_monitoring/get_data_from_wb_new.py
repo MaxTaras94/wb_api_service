@@ -78,7 +78,7 @@ async def get_all_warehouses(api_key: str) -> List[dict]:
     if warehouses.status_code != 200:        
         return "error"
     else:
-        return return warehouses.json()
+        return warehouses.json()
         
 async def get_data_from_wb(link_operation_wb: str,
                            api_key: str,
