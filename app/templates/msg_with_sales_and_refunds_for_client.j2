@@ -17,8 +17,8 @@
 🌎 {{data['warehouseName']}}<br>
 🚛 В пути до клиента: <b>{{data['inWayToClient']}}</b><br>
 🚚 В пути от клиента: <b>{{data['inWayFromClient']}}</b><br><br>
-{% if len(data['stocks_on_warehouses']) != 0 %}
 👇<b>Остатки на складах</b><br><br>
+{% if len(data['stocks_on_warehouses']) != 0 %}
 {% for warehouse in data['stocks_on_warehouses'] %}
 ▶️ {{warehouse['warehouse_name']}}: <b>{{warehouse['stock']}} шт.</b> хватит на <b>{{warehouse['on_count_days']}} дн</b><br>
 {% endfor %}
