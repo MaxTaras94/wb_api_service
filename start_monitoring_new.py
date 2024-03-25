@@ -89,7 +89,7 @@ async def try_to_get_stocks(subscription: OperationRegroupedDataResponse,
     count_try = 4
     num = 0
     while num <= count_try:
-        stocks_wb: List[dict] = await get_stocks_from_wb(settings.stockurl, subscription['api_key'], date_today)
+        stocks_wb = await get_stocks_from_wb(settings.stockurl, subscription['api_key'], date_today)
         if isinstance(stocks_wb, dict):
             num += 1
             await asyncio.sleep(10)
@@ -109,13 +109,13 @@ async def check_operations(date_today: str):
             subscription['users'][key]['telegram_ids'].keys()] for key in subscription['users'].keys()])) #получаем список значений по ключу is_subscriber для каждого tg id из списка
             if any(user_is_subscriber_channel): #проверяем есть ли пользователи подписанные на канал
                 # stocks_wb: List[dict] = await try_to_get_stocks(subscription['api_key'], date_today)
-                stocks_wb: List[dict] = await get_stocks_from_wb(settings.stockurl, subscription['api_key'], date_today)
+                stocks_wb = await get_stocks_from_wb(settings.stockurl, subscription['api_key'], date_today)
                 tasks.extend(create_task_list(stocks_wb, subscription, date_today))
             else:
                 continue
         else:
             # stocks_wb: List[dict] = await try_to_get_stocks(subscription['api_key'], date_today)
-            stocks_wb: List[dict] = await get_stocks_from_wb(settings.stockurl, subscription['api_key'], date_today)
+            stocks_wb = await get_stocks_from_wb(settings.stockurl, subscription['api_key'], date_today)
             tasks.extend(create_task_list(stocks_wb, subscription, date_today))
     await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -127,7 +127,7 @@ async def start_checking():
 if __name__ == "__main__":
     try:
         scheduler = AsyncIOScheduler()
-        scheduler.add_job(start_checking, 'interval', minutes=10)
+        scheduler.add_job(start_checking, 'interval', minutes=3)
         scheduler.start()
     except Exception as e:
         logger.error(f'Ошибка в блоке __name__\nТекст ошибки: {e}')

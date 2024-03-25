@@ -44,6 +44,7 @@ async def dynamics_operations_on_barcodes(operations: List[dict],
                                               "on_count_days": on_count_days_floor
                                              })
             o["count_of_operations"] = barcodes_and_count_of_operations[o['barcode']]
+        o['total_stocks_on_warehouses'] = sum([_["stock"] for _ in o['stocks_on_warehouses']])
     return operations
 
 def operations_sorter(operations: List[dict]) -> List[dict]:
@@ -143,7 +144,6 @@ async def sender_messeges_to_telegram(data_for_msg: dict,
             name_key = subscription['users'][type_operation]['names_wb_key'][num]
             data_for_msg['name_key'] = name_key if name_key is not None else subscription['api_key'][:10]+"..."+subscription['api_key'][-10:]
             text_msg = render_template(name_template, data={'data':data_for_msg, 'quote':quote, 'len': len})
-            logger.info(f"В ф-ции sender_messeges_to_telegram. text_msg={text_msg}")
             await send_message_to_tg(tg_user_id, text_msg, data_for_msg['img'])
             if not is_subscriber_db["is_subscriber"]:
                 await update_status_subscribe_in_db(tg_user_id, True)
@@ -252,6 +252,7 @@ async def parsing_order_data(orders_from_wb: List[List[dict]],
                                                               "stock": stock["quantityFull"],
                                                               "on_count_days": on_count_days
                                                              })
+                    total_stocks_on_warehouses = sum([_["stock"] for _ in stocks_on_warehouses])
                     data_for_msg = {
                         "date_and_time_order": date_and_time_order.strftime("%d.%m.%Y %H:%M:%S"),
                         "number_orders_with_this_nmId_today": digit_separator(math.ceil(sum([1 for _ in orders if all([_["nmId"] == order["nmId"], \
@@ -281,6 +282,7 @@ async def parsing_order_data(orders_from_wb: List[List[dict]],
                         "reviewRating": reviewRating,
                         "warehouseName": order['warehouseName'] + " → " + order['regionName'],
                         "stocks_on_warehouses": stocks_on_warehouses,
+                        "total_stocks_on_warehouses": total_stocks_on_warehouses,
                         "inWayToClient": digit_separator(in_way_to_client),
                         "inWayFromClient": digit_separator(in_way_from_client)
                     }    
@@ -334,6 +336,7 @@ async def parsing_sales_refunds_data(operations_from_wb: List[List[dict]],
                                                               "stock": stock["quantityFull"],
                                                               "on_count_days": on_count_days
                                                              })
+                    total_stocks_on_warehouses = sum([_["stock"] for _ in stocks_on_warehouses])
                     data_for_msg = {
                         "date_and_time_operation": date_and_time_operation.strftime("%d.%m.%Y %H:%M:%S"),
                         "number_operations_with_this_nmId_today": digit_separator(math.ceil(sum([1 for _ in operations if _["nmId"] == operation["nmId"] \
@@ -366,6 +369,7 @@ async def parsing_sales_refunds_data(operations_from_wb: List[List[dict]],
                         "reviewRating": reviewRating,
                         "warehouseName": operation["warehouseName"] + " → " + operation["regionName"],
                         "stocks_on_warehouses": stocks_on_warehouses,
+                        "total_stocks_on_warehouses": total_stocks_on_warehouses,
                         "inWayToClient": digit_separator(in_way_to_client),
                         "inWayFromClient": digit_separator(in_way_from_client)
                     }    
