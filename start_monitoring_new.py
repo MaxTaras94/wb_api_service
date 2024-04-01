@@ -14,7 +14,9 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import datetime
 import httpx
 import itertools
+import math
 from typing import List, Tuple
+import time
 
 
 async def is_checking_subscription() -> bool:
@@ -25,8 +27,10 @@ async def is_checking_subscription() -> bool:
             check_subscription = await client.get(settings.server_host+"/api/botsettings/get_status_check_subscription/")
         data =  check_subscription.json()
         return data['is_checking']
-    except Exception as e:
-        return {'status': 'error', 'text_error': e, 'is_checking': None}
+    except Exception:
+        import traceback
+        logger.error(traceback.format_exc())
+        return None
         
 async def try_to_get_stocks(api_key: str) -> List[dict]:
     '''Функция для получения остатков со складов ВБ. Она нужна для повторения попыток получить остатки, если с первого раза ВБ вернул ошибку
@@ -34,14 +38,12 @@ async def try_to_get_stocks(api_key: str) -> List[dict]:
     count_try = 4
     num = 0
     while num <= count_try:
-        logger.info(f"try_to_get_stocks, try #{num}")
         stocks_wb = await get_stocks_from_wb(api_key)
         if isinstance(stocks_wb, dict):
             num += 1
             await asyncio.sleep(15)
         else:
             break
-    logger.info(f"try_to_get_stocks, тип stocks_wb => {type(stocks_wb)}")
     return stocks_wb
 
 async def try_to_get_data_from_wb(url_for_req: str,
@@ -52,7 +54,6 @@ async def try_to_get_data_from_wb(url_for_req: str,
     count_try = 4
     num = 0
     while num <= count_try:
-        logger.info(f"try_to_get_data_from_wb, {url_for_req} try #{num}")
         data_from_wb = await get_data_from_wb(url_for_req, api_key)
         if isinstance(data_from_wb, dict):
             num += 1
@@ -81,13 +82,13 @@ async def process_get_data(url_for_req: str,
     data_from_wb: List[dict] = await try_to_get_data_from_wb(url_for_req, 
                                                              subscription['api_key']
                                                              )
-    if isinstance(data_from_wb, list):
+    if all([isinstance(data_from_wb, list), isinstance(stocks_wb, list)]):
         if 'orders' in url_for_req:
             parsing_data = await parsing_order_data([data_from_wb, stocks_wb], subscription)
         else:
             parsing_data = await parsing_sales_refunds_data([data_from_wb, stocks_wb], subscription)
     else:
-        logger.error(f"Ошибка при получении данных о {url_for_req.split('/')[-1]}: {data_from_wb}")
+        logger.error(f"FUNC process_get_data Ошибка при получении данных {url_for_req}: {data_from_wb} \n stocks_wb ={stocks_wb} \n Ключ {subscription['api_key']}")
         
         
 def create_task_list(stocks_wb: List[dict],
@@ -114,12 +115,17 @@ async def check_operations() -> None:
     '''Функция запускает проверку операций на ВБ по расписанию
     '''
     checking_subscription: bool = await is_checking_subscription()
+    start_time = time.time()
     subscribers: OperationRegroupedDataResponse = await get_subscribers(checking_subscription)
+    end_time = time.time()
+    execution_time_of_get_subscribers = end_time - start_time
+    logger.info(f'Время выполнения ф-ции get_subscribers = {math.ceil(execution_time_of_get_subscribers)} sec. Проверил статус для {len(subscribers)} users')
     tasks = []
     for subscription in subscribers:
         if checking_subscription:
             user_is_subscriber_channel = list(itertools.chain.from_iterable([[subscription['users'][key]['telegram_ids'][k]['is_subscriber'] for k in \
             subscription['users'][key]['telegram_ids'].keys()] for key in subscription['users'].keys()])) #получаем список значений по ключу is_subscriber для каждого tg id из списка
+            logger.info(f'В ф-ции check_operations. user_is_subscriber_channel = {user_is_subscriber_channel}')
             if any(user_is_subscriber_channel): #проверяем есть ли пользователи подписанные на канал
                 stocks_wb = await try_to_get_stocks(subscription['api_key'])
                 tasks.extend(create_task_list(stocks_wb, subscription))
@@ -133,10 +139,11 @@ async def check_operations() -> None:
 if __name__ == "__main__":
     try:
         scheduler = AsyncIOScheduler()
-        scheduler.add_job(check_operations, 'interval', minutes=31)
+        scheduler.add_job(check_operations, 'interval', minutes=2)
         scheduler.start()
-    except Exception as e:
-        logger.error(f'Ошибка в блоке __name__\nТекст ошибки: {e}')
+    except Exception:
+        import traceback
+        logger.error(traceback.format_exc())
     try:
         asyncio.get_event_loop().run_forever()
     except (KeyboardInterrupt, SystemExit):

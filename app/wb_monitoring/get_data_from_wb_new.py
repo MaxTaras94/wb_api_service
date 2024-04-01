@@ -141,21 +141,25 @@ async def sender_messeges_to_telegram(data_for_msg: dict,
             async with httpx.AsyncClient(timeout=30) as client:
                 data = await client.get(settings.server_host + f"/api/checksubscribe/get_current_status/{tg_user_id}")
             is_subscriber_db = data.json()
+            logger.info(f"subscription['api_key'] = {subscription['api_key']}\nis_subscriber = {is_subscriber} | is_subscriber_db = {is_subscriber_db} ")
             if is_subscriber or is_subscriber is None:
                 name_key = subscription['users'][type_operation]['names_wb_key'][num]
                 data_for_msg['name_key'] = name_key if name_key is not None else subscription['api_key'][:10]+"..."+subscription['api_key'][-10:]
                 text_msg = render_template(name_template, data={'data':data_for_msg, 'quote':quote, 'len': len})
-                await send_message_to_tg(tg_user_id, text_msg, data_for_msg['img'])
+                status_sending = await send_message_to_tg(tg_user_id, text_msg, data_for_msg['img'])
                 if not is_subscriber_db["is_subscriber"]:
                     await update_status_subscribe_in_db(tg_user_id, True)
             else:
                 if is_subscriber_db["is_subscriber"]:
                     text_msg = render_template("no_send_alert_of_new_operations.j2")
-                    await send_message_to_tg(tg_user_id, text_msg, "")
+                    status_sending = await send_message_to_tg(tg_user_id, text_msg, "")
                     await update_status_subscribe_in_db(tg_user_id, False) 
+            logger.info(f"Статус отправки сообщения в тг, ф-ция sender_messeges_to_telegram:  {status_sending}")
         await asyncio.sleep(0.1)
         return True
-    except:
+    except Exception:
+        import traceback
+        logger.error(traceback.format_exc())
         return False
 
 async def generic_link_for_nmId_img(nmId: int) -> str:
@@ -244,6 +248,7 @@ async def parsing_order_data(orders_from_wb: List[List[dict]],
     stocks = orders_from_wb[1]
     orders = operations_sorter(orders_from_wb[0])
     time_last_order_in_wb = time_last_order_in_wb_from_db
+    status_send_msg_in_tg = None
     try:
         for order in orders:
             date_and_time_order = order['parsed_date']
@@ -304,16 +309,13 @@ async def parsing_order_data(orders_from_wb: List[List[dict]],
                         "inWayToClient": digit_separator(in_way_to_client),
                         "inWayFromClient": digit_separator(in_way_from_client)
                     }    
-                    try:
-                        status_send_msg_in_tg = await sender_messeges_to_telegram(data_for_msg, subscription, type_operation = '1')
-                    except Exception as e:
-                        status_send_msg_in_tg = False
-                        logger.error(f"Ошибка при отправке сообщения в функции parsing_order_data: {e}")
+                    status_send_msg_in_tg = await sender_messeges_to_telegram(data_for_msg, subscription, type_operation = '1')
         if status_send_msg_in_tg:
             for id_wb_key in subscription['users']['1']['ids_wb_key']:           
                 await update_time_last_in_wb(1, id_wb_key, time_last_order_in_wb.isoformat())
-    except Exception as e:
-        logger.error(e)
+    except Exception:
+        import traceback
+        logger.error(traceback.format_exc())
 
 
 async def parsing_sales_refunds_data(operations_from_wb: List[List[dict]],
@@ -330,6 +332,8 @@ async def parsing_sales_refunds_data(operations_from_wb: List[List[dict]],
     operations = operations_sorter(operations_from_wb[0])
     time_last_sale_in_wb = time_last_sale_in_wb_from_db
     time_last_refund_in_wb = time_last_refund_in_wb_from_db
+    status_send_msg_sell_in_tg = None
+    status_send_msg_ref_in_tg = None
     try:
         for operation in operations:
             date_and_time_operation = operation["parsed_date"]
@@ -395,16 +399,11 @@ async def parsing_sales_refunds_data(operations_from_wb: List[List[dict]],
                         "inWayToClient": digit_separator(in_way_to_client),
                         "inWayFromClient": digit_separator(in_way_from_client)
                     }    
-                    try:
-                        if data_for_msg["typeOperation"] == "Продажа 💰":
-                            status_send_msg_sell_in_tg = await sender_messeges_to_telegram(data_for_msg, subscription, type_operation = '2')
-                            status_send_msg_ref_in_tg = False
-                        else:
-                            status_send_msg_ref_in_tg = await sender_messeges_to_telegram(data_for_msg, subscription, type_operation = '3')
-                            status_send_msg_sell_in_tg = False
-                    except Exception as e:
-                        logger.error(f"Ошибка при отправке сообщения в функции parsing_sales_refunds_data: {e}")
+                    if data_for_msg["typeOperation"] == "Продажа 💰":
+                        status_send_msg_sell_in_tg = await sender_messeges_to_telegram(data_for_msg, subscription, type_operation = '2')
                         status_send_msg_ref_in_tg = False
+                    else:
+                        status_send_msg_ref_in_tg = await sender_messeges_to_telegram(data_for_msg, subscription, type_operation = '3')
                         status_send_msg_sell_in_tg = False
         if status_send_msg_sell_in_tg: 
             for id_wb_key in subscription['users']['2']['ids_wb_key']:           
@@ -412,5 +411,6 @@ async def parsing_sales_refunds_data(operations_from_wb: List[List[dict]],
         if status_send_msg_ref_in_tg:
             for id_wb_key in subscription['users']['3']['ids_wb_key']:   
                 await update_time_last_in_wb(3, id_wb_key, time_last_refund_in_wb.isoformat())
-    except Exception as e:
-        logger.error(e)
+    except Exception:
+        import traceback
+        logger.error(traceback.format_exc())
