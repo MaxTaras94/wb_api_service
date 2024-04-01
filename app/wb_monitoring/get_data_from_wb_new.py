@@ -132,7 +132,7 @@ async def update_status_subscribe_in_db(tg_user_id: int,
 async def sender_messeges_to_telegram(data_for_msg: dict,
                                       subscription: OperationRegroupedDataResponse,
                                       type_operation: str = None
-                                      ) -> None:   
+                                      ) -> bool:   
     try:
         name_template = 'msg_with_orders_for_client.j2' if type_operation == "1" else "msg_with_sales_and_refunds_for_client.j2"
         telegram_ids = list(subscription['users'][type_operation]['telegram_ids'].keys())
@@ -304,16 +304,16 @@ async def parsing_order_data(orders_from_wb: List[List[dict]],
                         "inWayToClient": digit_separator(in_way_to_client),
                         "inWayFromClient": digit_separator(in_way_from_client)
                     }    
-                    logger.info(f"###parsing_order_data ::: data_for_msg =>{data_for_msg}")
                     try:
                         status_send_msg_in_tg = await sender_messeges_to_telegram(data_for_msg, subscription, type_operation = '1')
                     except Exception as e:
+                        status_send_msg_in_tg = False
                         logger.error(f"Ошибка при отправке сообщения в функции parsing_order_data: {e}")
         if status_send_msg_in_tg:
             for id_wb_key in subscription['users']['1']['ids_wb_key']:           
                 await update_time_last_in_wb(1, id_wb_key, time_last_order_in_wb.isoformat())
     except Exception as e:
-        logger.error(f"Текст ошибки: {e}")
+        logger.error(e)
 
 
 async def parsing_sales_refunds_data(operations_from_wb: List[List[dict]],
@@ -395,14 +395,17 @@ async def parsing_sales_refunds_data(operations_from_wb: List[List[dict]],
                         "inWayToClient": digit_separator(in_way_to_client),
                         "inWayFromClient": digit_separator(in_way_from_client)
                     }    
-                    logger.info(f"###parsing_sales_refunds_data ::: data_for_msg =>{data_for_msg}")
                     try:
                         if data_for_msg["typeOperation"] == "Продажа 💰":
                             status_send_msg_sell_in_tg = await sender_messeges_to_telegram(data_for_msg, subscription, type_operation = '2')
+                            status_send_msg_ref_in_tg = False
                         else:
                             status_send_msg_ref_in_tg = await sender_messeges_to_telegram(data_for_msg, subscription, type_operation = '3')
+                            status_send_msg_sell_in_tg = False
                     except Exception as e:
                         logger.error(f"Ошибка при отправке сообщения в функции parsing_sales_refunds_data: {e}")
+                        status_send_msg_ref_in_tg = False
+                        status_send_msg_sell_in_tg = False
         if status_send_msg_sell_in_tg: 
             for id_wb_key in subscription['users']['2']['ids_wb_key']:           
                 await update_time_last_in_wb(2, id_wb_key, time_last_sale_in_wb.isoformat())
@@ -410,4 +413,4 @@ async def parsing_sales_refunds_data(operations_from_wb: List[List[dict]],
             for id_wb_key in subscription['users']['3']['ids_wb_key']:   
                 await update_time_last_in_wb(3, id_wb_key, time_last_refund_in_wb.isoformat())
     except Exception as e:
-        logger.error(f"Текст ошибки: {e}")
+        logger.error(e)

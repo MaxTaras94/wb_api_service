@@ -38,7 +38,7 @@ async def try_to_get_stocks(api_key: str) -> List[dict]:
         stocks_wb = await get_stocks_from_wb(api_key)
         if isinstance(stocks_wb, dict):
             num += 1
-            await asyncio.sleep(20)
+            await asyncio.sleep(15)
         else:
             break
     logger.info(f"try_to_get_stocks, тип stocks_wb => {type(stocks_wb)}")
@@ -59,7 +59,6 @@ async def try_to_get_data_from_wb(url_for_req: str,
             await asyncio.sleep(20)
         else:
             break
-    logger.info(f"try_to_get_data_from_wb, тип data_from_wb => {type(data_from_wb)}")
     return data_from_wb
     
 async def get_subscribers(checking_subscription: bool) -> Tuple[OperationRegroupedDataResponse]:
@@ -71,7 +70,6 @@ async def get_subscribers(checking_subscription: bool) -> Tuple[OperationRegroup
                                                                                                    }
                                     )
     users_subscribed_to_opearations: OperationRegroupedDataResponse = response.json()
-    logger.info(f"В ф-ции get_subscribers. users_subscribed_to_opearations => {users_subscribed_to_opearations}")
     return users_subscribed_to_opearations['data']
 
 async def process_get_data(url_for_req: str,
@@ -119,26 +117,23 @@ async def check_operations() -> None:
     subscribers: OperationRegroupedDataResponse = await get_subscribers(checking_subscription)
     tasks = []
     for subscription in subscribers:
-        logger.info(f"subscription['api_key'] => {subscription['api_key']}")
         if checking_subscription:
             user_is_subscriber_channel = list(itertools.chain.from_iterable([[subscription['users'][key]['telegram_ids'][k]['is_subscriber'] for k in \
             subscription['users'][key]['telegram_ids'].keys()] for key in subscription['users'].keys()])) #получаем список значений по ключу is_subscriber для каждого tg id из списка
             if any(user_is_subscriber_channel): #проверяем есть ли пользователи подписанные на канал
                 stocks_wb = await try_to_get_stocks(subscription['api_key'])
-                # stocks_wb = await get_stocks_from_wb(subscription['api_key'])
                 tasks.extend(create_task_list(stocks_wb, subscription))
             else:
                 await sender_messeges_to_telegram({}, subscription, "1")
         else:
             stocks_wb = await try_to_get_stocks(subscription['api_key'])
-            # stocks_wb = await get_stocks_from_wb(subscription['api_key'])
             tasks.extend(create_task_list(stocks_wb, subscription))
     await asyncio.gather(*tasks, return_exceptions=True)
 
 if __name__ == "__main__":
     try:
         scheduler = AsyncIOScheduler()
-        scheduler.add_job(check_operations, 'interval', minutes=2)
+        scheduler.add_job(check_operations, 'interval', minutes=31)
         scheduler.start()
     except Exception as e:
         logger.error(f'Ошибка в блоке __name__\nТекст ошибки: {e}')
