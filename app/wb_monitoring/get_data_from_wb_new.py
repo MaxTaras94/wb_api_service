@@ -122,7 +122,7 @@ async def get_stocks_from_wb(api_key: str) -> List[dict]:
 async def update_status_subscribe_in_db(tg_user_id: int,
                                         is_subscriber: bool
                                         ) -> None:
-    async with httpx.AsyncClient(timeout=30) as client:
+    async with httpx.AsyncClient(timeout=120) as client:
         await client.post(settings.server_host + f"/api/checksubscribe/update_status_subscription/",
                           json={'tg_user_id': tg_user_id,
                                 'is_subscriber': is_subscriber
@@ -138,7 +138,7 @@ async def sender_messeges_to_telegram(data_for_msg: dict,
         telegram_ids = list(subscription['users'][type_operation]['telegram_ids'].keys())
         for num, tg_user_id in enumerate(telegram_ids):
             is_subscriber = subscription['users'][type_operation]['telegram_ids'][tg_user_id]['is_subscriber']
-            async with httpx.AsyncClient(timeout=30) as client:
+            async with httpx.AsyncClient(timeout=120) as client:
                 data = await client.get(settings.server_host + f"/api/checksubscribe/get_current_status/{tg_user_id}")
             is_subscriber_db = data.json()
             logger.info(f"subscription['api_key'] = {subscription['api_key']}\nis_subscriber = {is_subscriber} | is_subscriber_db = {is_subscriber_db} ")
@@ -190,7 +190,7 @@ async def get_last_time_operation(id_:int,
                                   ) -> datetime.datetime:
     '''Функция возвращает из БД время последней операции в WB 
     '''
-    async with httpx.AsyncClient(timeout=30) as client:
+    async with httpx.AsyncClient(timeout=120) as client:
         res = await client.get(f'{settings.server_host}/api/notifications/get_time_last_in_wb/?id_={id_}&wb_api_keys_id={id_wb_key}')
     time_last_operation = res.json()
     time_last_operation = datetime.datetime.fromisoformat(time_last_operation['data']) if time_last_operation['data'] is not None \
@@ -204,7 +204,7 @@ async def update_time_last_in_wb(id_operation: int,
                                  ) -> None:
     '''Функция обновляет данные в БД по последней операции
     '''
-    async with httpx.AsyncClient(timeout=30) as client:
+    async with httpx.AsyncClient(timeout=120) as client:
         await client.post(f'{settings.server_host}/api/notifications/update_time_last_in_wb/',
                            json={'id_':id_operation,
                                        'wb_api_keys_id':id_wb_key,
