@@ -123,11 +123,12 @@ async def update_status_subscribe_in_db(tg_user_id: int,
                                         is_subscriber: bool
                                         ) -> None:
     async with httpx.AsyncClient(timeout=120) as client:
-        await client.post(settings.server_host + f"/api/checksubscribe/update_status_subscription/",
+        res = await client.post(settings.server_host + f"/api/checksubscribe/update_status_subscription/",
                           json={'tg_user_id': tg_user_id,
                                 'is_subscriber': is_subscriber
                                }
                           ) 
+    logger.info(f'update_status_subscribe_in_db: => {res.json()}')
 
 async def sender_messeges_to_telegram(data_for_msg: dict,
                                       subscription: OperationRegroupedDataResponse,
