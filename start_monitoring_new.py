@@ -23,7 +23,7 @@ async def is_checking_subscription() -> bool:
     '''Функция возвращает из БД False, если проверка подписки не активна, иначе вернёт True
     '''
     try:
-        async with httpx.AsyncClient(timeout=120) as client:
+        async with httpx.AsyncClient(timeout=120, verify=False) as client:
             check_subscription = await client.get(settings.server_host+"/api/botsettings/get_status_check_subscription/")
         data =  check_subscription.json()
         return data['is_checking']
@@ -65,7 +65,7 @@ async def try_to_get_data_from_wb(url_for_req: str,
 async def get_subscribers(checking_subscription: bool) -> Tuple[OperationRegroupedDataResponse]:
     '''Функция возвращает список словарей пользователей, подписанных на получение уведомлений
     '''
-    async with httpx.AsyncClient(timeout=600) as client:     
+    async with httpx.AsyncClient(timeout=600, verify=False) as client:     
         response = await client.post(f"{settings.server_host}/api/monitoring/get_data_new/", json={'operations': [1,2,3], 
                                                                                                    'is_checking_subscription': checking_subscription
                                                                                                    }
@@ -79,9 +79,9 @@ async def process_get_data(url_for_req: str,
                            ) -> None:
     '''В этой функции получается инфа от ВБ и отправляется на парсинг в соответствующие ф-ции, в зависимости от типа операции
     '''
-    data_from_wb: List[dict] = await try_to_get_data_from_wb(url_for_req, 
-                                                             subscription['api_key']
-                                                             )
+    data_from_wb: List[dict] = await get_data_from_wb(url_for_req, 
+                                                      subscription['api_key']
+                                                      )
     if all([isinstance(data_from_wb, list), isinstance(stocks_wb, list)]):
         if 'orders' in url_for_req:
             parsing_data = await parsing_order_data([data_from_wb, stocks_wb], subscription)
@@ -127,12 +127,12 @@ async def check_operations() -> None:
             subscription['users'][key]['telegram_ids'].keys()] for key in subscription['users'].keys()])) #получаем список значений по ключу is_subscriber для каждого tg id из списка
             logger.info(f'В ф-ции check_operations. user_is_subscriber_channel = {user_is_subscriber_channel}')
             if any(user_is_subscriber_channel): #проверяем есть ли пользователи подписанные на канал
-                stocks_wb = await try_to_get_stocks(subscription['api_key'])
+                stocks_wb = await get_stocks_from_wb(subscription['api_key'])
                 tasks.extend(create_task_list(stocks_wb, subscription))
             else:
                 await sender_messeges_to_telegram({}, subscription, "1")
         else:
-            stocks_wb = await try_to_get_stocks(subscription['api_key'])
+            stocks_wb = await get_stocks_from_wb(subscription['api_key'])
             tasks.extend(create_task_list(stocks_wb, subscription))
     await asyncio.gather(*tasks, return_exceptions=True)
 
