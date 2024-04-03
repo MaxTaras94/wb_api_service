@@ -72,7 +72,7 @@ async def get_all_warehouse_stocks(api_key: str,
     '''Функция возвращает остатки товаров со склада продавца по его warehouseId для переданных barcodes
     '''
     headers = {"Authorization": api_key, "content-Type": "application/json"}
-    async with httpx.AsyncClient(timeout=30) as client:
+    async with httpx.AsyncClient(timeout=240) as client:
         warehouse_stocks = await client.post(settings.warehouses_stocks+'/'+str(warehouseId), headers=headers, json={'skus':barcodes})
     return warehouse_stocks.json()
 
@@ -81,7 +81,7 @@ async def get_all_warehouses(api_key: str) -> List[dict]:
     '''Функция возвращает список всех пользовательских складов
     '''
     headers = {"Authorization": api_key, "content-Type": "application/json"}
-    async with httpx.AsyncClient(timeout=30) as client:
+    async with httpx.AsyncClient(timeout=240) as client:
         warehouses = await client.get(settings.warehouses, headers=headers)
     if warehouses.status_code != 200:        
         return "error"
@@ -95,7 +95,7 @@ async def get_data_from_wb(link_operation_wb: str,
     headers = {"Authorization": api_key, "content-Type": "application/json"}
     date_and_time = (datetime.datetime.today() - datetime.timedelta(days=8)).strftime("%Y-%m-%d")
     api_url_yestarday = link_operation_wb+"?dateFrom="+date_and_time
-    async with httpx.AsyncClient(timeout=30) as client:
+    async with httpx.AsyncClient(timeout=240) as client:
        wb_data = await client.get(api_url_yestarday, headers=headers)
     operations = wb_data.json()
     if isinstance(operations, list):
@@ -114,7 +114,7 @@ async def get_stocks_from_wb(api_key: str) -> List[dict]:
     headers = {"Authorization": api_key, "content-Type": "application/json"}
     date_and_time = (datetime.datetime.today() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
     api_url_stocks = settings.stockurl+"?dateFrom="+date_and_time
-    async with httpx.AsyncClient(timeout=30) as client:
+    async with httpx.AsyncClient(timeout=240) as client:
         stocks = await client.get(api_url_stocks, headers=headers)
     return stocks.json()
         
@@ -122,7 +122,7 @@ async def get_stocks_from_wb(api_key: str) -> List[dict]:
 async def update_status_subscribe_in_db(tg_user_id: int,
                                         is_subscriber: bool
                                         ) -> None:
-    async with httpx.AsyncClient(timeout=120) as client:
+    async with httpx.AsyncClient(timeout=240) as client:
         res = await client.post(settings.server_host + f"/api/checksubscribe/update_status_subscription/",
                           json={'tg_user_id': tg_user_id,
                                 'is_subscriber': is_subscriber
@@ -139,7 +139,7 @@ async def sender_messeges_to_telegram(data_for_msg: dict,
         telegram_ids = list(subscription['users'][type_operation]['telegram_ids'].keys())
         for num, tg_user_id in enumerate(telegram_ids):
             is_subscriber = subscription['users'][type_operation]['telegram_ids'][tg_user_id]['is_subscriber']
-            async with httpx.AsyncClient(timeout=120) as client:
+            async with httpx.AsyncClient(timeout=240) as client:
                 data = await client.get(settings.server_host + f"/api/checksubscribe/get_current_status/{tg_user_id}")
             is_subscriber_db = data.json()
             logger.info(f"subscription['api_key'] = {subscription['api_key']}\nis_subscriber = {is_subscriber} | is_subscriber_db = {is_subscriber_db} ")
@@ -175,7 +175,7 @@ async def generic_link_for_nmId_img(nmId: int) -> str:
             photo_url = f'https://basket-{N}.wb.ru/vol{nmId_str[0:4]}/part{nmId_str[0:6]}/{nmId_str}/images/big/1.webp'
         elif len(nmId_str) == 8:
             photo_url = f'https://basket-{N}.wb.ru/vol{nmId_str[0:3]}/part{nmId_str[0:5]}/{nmId_str}/images/big/1.webp'            
-        async with httpx.AsyncClient(timeout=30) as client:
+        async with httpx.AsyncClient(timeout=240) as client:
             img_res = await client.get(photo_url)
         status_code = img_res.status_code
         if status_code == 200:
@@ -191,7 +191,7 @@ async def get_last_time_operation(id_:int,
                                   ) -> datetime.datetime:
     '''Функция возвращает из БД время последней операции в WB 
     '''
-    async with httpx.AsyncClient(timeout=120) as client:
+    async with httpx.AsyncClient(timeout=240) as client:
         res = await client.get(f'{settings.server_host}/api/notifications/get_time_last_in_wb/?id_={id_}&wb_api_keys_id={id_wb_key}')
     time_last_operation = res.json()
     time_last_operation = datetime.datetime.fromisoformat(time_last_operation['data']) if time_last_operation['data'] is not None \
@@ -205,7 +205,7 @@ async def update_time_last_in_wb(id_operation: int,
                                  ) -> None:
     '''Функция обновляет данные в БД по последней операции
     '''
-    async with httpx.AsyncClient(timeout=120) as client:
+    async with httpx.AsyncClient(timeout=240) as client:
         await client.post(f'{settings.server_host}/api/notifications/update_time_last_in_wb/',
                            json={'id_':id_operation,
                                        'wb_api_keys_id':id_wb_key,
@@ -218,7 +218,7 @@ async def get_feedback_and_rating(nmId: int) -> tuple:
     '''
     api_url = f"https://card.wb.ru/cards/detail?curr=rub&dest=123585628&nm={nmId}" # ссыль для получения данных о кол-ве отзывов и рейтинге для nmId
     try:
-        async with httpx.AsyncClient(timeout=30) as client:
+        async with httpx.AsyncClient(timeout=240) as client:
             res = await client.get(api_url)
         response = res.json()
         data = response["data"]["products"][0]

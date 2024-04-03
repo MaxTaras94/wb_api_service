@@ -139,7 +139,7 @@ async def check_operations() -> None:
 if __name__ == "__main__":
     try:
         scheduler = AsyncIOScheduler()
-        scheduler.add_job(check_operations, 'interval', minutes=10)
+        scheduler.add_job(check_operations, 'interval', minutes=15)
         scheduler.start()
     except Exception:
         import traceback
