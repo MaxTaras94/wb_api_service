@@ -147,22 +147,26 @@ async def get_data_from_wb(link_operation_wb: str,
     api_url_yestarday = link_operation_wb+"?dateFrom="+date_and_time
     proxie = random.choice(proxies_list)
     count = 5
-    num = 0
-    try:
-        while num <= count:
-            async with httpx.AsyncClient(proxies=proxie, timeout=240, verify=False) as client:
+    num = 0 
+    while num <= count:
+        try:
+            async with httpx.AsyncClient(proxies=proxie, timeout=240) as client:
                wb_data = await client.get(api_url_yestarday, headers=headers)
             if wb_data.status_code != 200:
                 magnifier_count_of_proxie_using(proxie, err=True)
-                proxie = random.choice(proxies_list)
+                # proxie = random.choice(proxies_list)
                 num += 1
+                logger.info(f'get_data_from_wb, попытка №{num}')
             else:
                 magnifier_count_of_proxie_using(proxie)
                 break
-    except Exception as e:
-        logger.error(f"proxie=>{proxie}, ошибка в функции get_data_from_wb: {e}")
-        magnifier_count_of_proxie_using(proxie, err=True)
-        return {}
+        except Exception as e:
+            logger.error(f"proxie=>{proxie}, ошибка в функции get_data_from_wb: {e}")
+            magnifier_count_of_proxie_using(proxie, err=True)
+            # proxie = random.choice(proxies_list)
+            logger.info(f'get_data_from_wb, попытка №{num}')
+            num += 1
+            continue
     if wb_data.status_code != 200:
         return {}
     operations = wb_data.json()
@@ -187,22 +191,27 @@ async def get_stocks_from_wb(api_key: str) -> List[dict]:
     proxie = random.choice(proxies_list)
     count = 5
     num = 0
-    try:
-        while num <= count:
-            async with httpx.AsyncClient(proxies=proxie, timeout=240, verify=False) as client:
+    while num <= count:
+        try:
+            async with httpx.AsyncClient(proxies=proxie, timeout=240) as client:
                 stocks = await client.get(api_url_stocks, headers=headers)
             if stocks.status_code != 200:
                 magnifier_count_of_proxie_using(proxie, err=True)
-                proxie = random.choice(proxies_list)
+                # proxie = random.choice(proxies_list)
                 num += 1
+                logger.info(f'get_stocks_from_wb, попытка №{num}')
             else:
                 magnifier_count_of_proxie_using(proxie)
                 break
-        return stocks.json()
-    except Exception as e:
-        logger.error(f"proxie=>{proxie}, ошибка в функции get_stocks_from_wb:  {e}")
-        magnifier_count_of_proxie_using(proxie, err=True)
-        return {}
+        except Exception as e:
+            logger.error(f"proxie=>{proxie}, ошибка в функции get_stocks_from_wb:  {e}")
+            magnifier_count_of_proxie_using(proxie, err=True)
+            # proxie = random.choice(proxies_list)
+            num += 1
+            logger.info(f'get_stocks_from_wb, попытка №{num}')
+            continue
+    return stocks.json()
+    
         
 async def update_status_subscribe_in_db(tg_user_id: int,
                                         is_subscriber: bool
