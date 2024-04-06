@@ -7,7 +7,8 @@ from app.wb_monitoring.get_data_from_wb_new import (
         get_stocks_from_wb,
         parsing_order_data,
         parsing_sales_refunds_data,
-        sender_messeges_to_telegram
+        sender_messeges_to_telegram,
+        total_counter_for_proxies
 )
 from api.notifications import update_time_last_in_wb
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -17,6 +18,7 @@ import itertools
 import math
 from typing import List, Tuple
 import time
+
 
 
 async def is_checking_subscription() -> bool:
@@ -41,7 +43,6 @@ async def try_to_get_stocks(api_key: str) -> List[dict]:
         stocks_wb = await get_stocks_from_wb(api_key)
         if isinstance(stocks_wb, dict):
             num += 1
-            await asyncio.sleep(15)
         else:
             break
     return stocks_wb
@@ -57,7 +58,6 @@ async def try_to_get_data_from_wb(url_for_req: str,
         data_from_wb = await get_data_from_wb(url_for_req, api_key)
         if isinstance(data_from_wb, dict):
             num += 1
-            await asyncio.sleep(20)
         else:
             break
     return data_from_wb
@@ -79,9 +79,9 @@ async def process_get_data(url_for_req: str,
                            ) -> None:
     '''В этой функции получается инфа от ВБ и отправляется на парсинг в соответствующие ф-ции, в зависимости от типа операции
     '''
-    data_from_wb: List[dict] = await get_data_from_wb(url_for_req, 
-                                                      subscription['api_key']
-                                                      )
+    data_from_wb: List[dict] = await try_to_get_data_from_wb(url_for_req, 
+                                                          subscription['api_key']
+                                                          )
     if all([isinstance(data_from_wb, list), isinstance(stocks_wb, list)]):
         if 'orders' in url_for_req:
             parsing_data = await parsing_order_data([data_from_wb, stocks_wb], subscription)
@@ -114,6 +114,7 @@ def create_task_list(stocks_wb: List[dict],
 async def check_operations() -> None:
     '''Функция запускает проверку операций на ВБ по расписанию
     '''
+    logger.info(f'total_counter_for_proxies = {total_counter_for_proxies}')
     checking_subscription: bool = await is_checking_subscription()
     start_time = time.time()
     subscribers: OperationRegroupedDataResponse = await get_subscribers(checking_subscription)
@@ -127,19 +128,19 @@ async def check_operations() -> None:
             subscription['users'][key]['telegram_ids'].keys()] for key in subscription['users'].keys()])) #получаем список значений по ключу is_subscriber для каждого tg id из списка
             logger.info(f'В ф-ции check_operations. user_is_subscriber_channel = {user_is_subscriber_channel}')
             if any(user_is_subscriber_channel): #проверяем есть ли пользователи подписанные на канал
-                stocks_wb = await get_stocks_from_wb(subscription['api_key'])
+                stocks_wb = await try_to_get_stocks(subscription['api_key'])
                 tasks.extend(create_task_list(stocks_wb, subscription))
             else:
                 await sender_messeges_to_telegram({}, subscription, "1")
         else:
-            stocks_wb = await get_stocks_from_wb(subscription['api_key'])
+            stocks_wb = await try_to_get_stocks(subscription['api_key'])
             tasks.extend(create_task_list(stocks_wb, subscription))
     await asyncio.gather(*tasks, return_exceptions=True)
 
 if __name__ == "__main__":
     try:
         scheduler = AsyncIOScheduler()
-        scheduler.add_job(check_operations, 'interval', minutes=15)
+        scheduler.add_job(check_operations, 'interval', minutes=3)
         scheduler.start()
     except Exception:
         import traceback

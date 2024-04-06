@@ -9,13 +9,30 @@ from app.templates.templates import render_template
 from collections import defaultdict
 import datetime
 import httpx
+import json
 import math
-from random import random, randint
+import random
 from typing import Dict, List, Tuple
 import urllib.request
 from urllib.parse import quote
 
 
+with open('./proxies_list.json') as f:
+    data = json.load(f)
+    proxies_list = data['proxies']
+print(proxies_list)
+
+total_counter_for_proxies = {}
+
+
+def magnifier_count_of_proxie_using(proxie: str, err: bool = None) -> None:
+    if proxie not in total_counter_for_proxies:
+        total_counter_for_proxies[proxie] = {'total_count_of_using': 1,
+                                             'count_of_faild_using': 0}
+    else:
+        total_counter_for_proxies[proxie]['total_count_of_using'] += 1
+    if err:
+        total_counter_for_proxies[proxie]['count_of_faild_using'] += 1
 
 def get_all_barcodes(operations: List[dict]) -> List[str]:
     '''Функция возвращает список уникальных bar-кодов по полученному списку заказов/продаж/возвратов
@@ -40,6 +57,8 @@ async def dynamics_operations_on_barcodes(operations: List[dict],
     '''
     for num, warehouse in enumerate(list_of_warehouses):
         all_warehouse_stocks = await get_all_warehouse_stocks(api_key, warehouse['id'], get_all_barcodes(operations))
+        if isinstance(all_warehouse_stocks, dict):
+            return {}
         list_of_warehouses[num]['stocks'] = {item['sku']: item['amount'] for item in all_warehouse_stocks['stocks']}  
     for o in operations:
         o['stocks_on_warehouses'] = []
@@ -72,21 +91,52 @@ async def get_all_warehouse_stocks(api_key: str,
     '''Функция возвращает остатки товаров со склада продавца по его warehouseId для переданных barcodes
     '''
     headers = {"Authorization": api_key, "content-Type": "application/json"}
-    async with httpx.AsyncClient(timeout=240, verify=False) as client:
-        warehouse_stocks = await client.post(settings.warehouses_stocks+'/'+str(warehouseId), headers=headers, json={'skus':barcodes})
+    checking = False
+    num_try = 0
+    proxie = random.choice(proxies_list)
+    magnifier_count_of_proxie_using(proxie)
+    try:
+        while not checking: 
+            async with httpx.AsyncClient(proxies=proxie, timeout=240, verify=False) as client:
+                warehouse_stocks = await client.post(settings.warehouses_stocks+'/'+str(warehouseId), headers=headers, json={'skus':barcodes})
+            if warehouse_stocks.status_code == 200:
+                checking = True
+            else:
+                if num_try == 3:
+                    num_try = 0
+                    proxie = random.choice(proxies_list)
+                else:
+                    num_try =+ 1
+    except:
+        magnifier_count_of_proxie_using(proxie, err=True)
+        return {}
     return warehouse_stocks.json()
+    
 
 
 async def get_all_warehouses(api_key: str) -> List[dict]:
     '''Функция возвращает список всех пользовательских складов
     '''
     headers = {"Authorization": api_key, "content-Type": "application/json"}
-    async with httpx.AsyncClient(timeout=240, verify=False) as client:
-        warehouses = await client.get(settings.warehouses, headers=headers)
-    if warehouses.status_code != 200:        
+    checking = False
+    num_try = 0
+    proxie = random.choice(proxies_list)
+    try:
+        while not checking:
+            async with httpx.AsyncClient(proxies=proxie, timeout=240, verify=False) as client:
+                warehouses = await client.get(settings.warehouses, headers=headers)
+            if warehouse_stocks.status_code == 200:
+                checking = True
+            else:
+                if num_try == 3:
+                    num_try = 0
+                    proxie = random.choice(proxies_list)
+                else:
+                    num_try =+ 1
+    except:
+        magnifier_count_of_proxie_using(proxie, err=True)
         return "error"
-    else:
-        return warehouses.json()
+    return warehouse_stocks.json()
         
 async def get_data_from_wb(link_operation_wb: str,
                            api_key: str) -> List[dict]:
@@ -95,8 +145,16 @@ async def get_data_from_wb(link_operation_wb: str,
     headers = {"Authorization": api_key, "content-Type": "application/json"}
     date_and_time = (datetime.datetime.today() - datetime.timedelta(days=8)).strftime("%Y-%m-%d")
     api_url_yestarday = link_operation_wb+"?dateFrom="+date_and_time
-    async with httpx.AsyncClient(timeout=240, verify=False) as client:
-       wb_data = await client.get(api_url_yestarday, headers=headers)
+    proxie = random.choice(proxies_list)
+    try:
+        async with httpx.AsyncClient(proxies=proxie, timeout=240, verify=False) as client:
+           wb_data = await client.get(api_url_yestarday, headers=headers)
+        if wb_data.status_code != 200:
+            return {}
+    except Exception as e:
+        logger.error(f"proxie=>{proxie}, ошибка в функции get_data_from_wb: {e}")
+        magnifier_count_of_proxie_using(proxie, err=True)
+        return {}
     operations = wb_data.json()
     if isinstance(operations, list):
         operation_with_dynamics = get_count_of_operations_for_barcode(operations)
@@ -105,6 +163,8 @@ async def get_data_from_wb(link_operation_wb: str,
             return operation_with_dynamics
         else:
             upgrade_operations = await dynamics_operations_on_barcodes(operation_with_dynamics, all_warehouses, api_key) #обогащаем операции данными об остатках со складов селлера
+            if isinstance(upgrade_operations, dict):
+                return operation_with_dynamics
             return upgrade_operations
     return operations
     
@@ -114,10 +174,18 @@ async def get_stocks_from_wb(api_key: str) -> List[dict]:
     headers = {"Authorization": api_key, "content-Type": "application/json"}
     date_and_time = (datetime.datetime.today() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
     api_url_stocks = settings.stockurl+"?dateFrom="+date_and_time
-    async with httpx.AsyncClient(timeout=240, verify=False) as client:
-        stocks = await client.get(api_url_stocks, headers=headers)
-    return stocks.json()
-        
+    proxie = random.choice(proxies_list)
+    try:
+        async with httpx.AsyncClient(proxies=proxie, timeout=240, verify=False) as client:
+            stocks = await client.get(api_url_stocks, headers=headers)
+        if stocks.status_code != 200:
+            logger.warning(f"proxie=>{proxie}, result: {stocks.status_code} ")
+            return {}
+        return stocks.json()
+    except Exception as e:
+        logger.error(f"proxie=>{proxie}, ошибка в функции get_stocks_from_wb:  {e}")
+        magnifier_count_of_proxie_using(proxie, err=True)
+        return {}
         
 async def update_status_subscribe_in_db(tg_user_id: int,
                                         is_subscriber: bool
@@ -243,6 +311,7 @@ async def parsing_order_data(orders_from_wb: List[List[dict]],
     '''Функция на вход получает ответ от API WB о заказах
        Парсит ответ и рассылает пользователям в тг
     '''
+    logger.info(f'В ф-ции parsing_order_data. Передан subscription => {subscription}')
     date_today_str = datetime.datetime.today().strftime("%Y-%m-%d")
     date_today = datetime.datetime.strptime(date_today_str, "%Y-%m-%d") 
     time_last_order_in_wb_from_db = await get_last_time_operation(1, subscription['users']['1']['ids_wb_key'][0], date_today)
@@ -325,6 +394,7 @@ async def parsing_sales_refunds_data(operations_from_wb: List[List[dict]],
     '''Функция на вход получает ответ от API WB о продажах или возвратах.
        Превращает в словарь с нужными полями, передает словарь в рендер jinja2 и после ф-цию отправки соощбений в бота тг
     '''
+    logger.info(f'В ф-ции parsing_sales_refunds_data. Передан subscription => {subscription}')
     date_today_str = datetime.datetime.today().strftime("%Y-%m-%d")
     date_today = datetime.datetime.strptime(date_today_str, "%Y-%m-%d")
     time_last_sale_in_wb_from_db = await get_last_time_operation(2, subscription['users']['2']['ids_wb_key'][0], date_today)
