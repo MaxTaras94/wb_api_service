@@ -146,14 +146,24 @@ async def get_data_from_wb(link_operation_wb: str,
     date_and_time = (datetime.datetime.today() - datetime.timedelta(days=8)).strftime("%Y-%m-%d")
     api_url_yestarday = link_operation_wb+"?dateFrom="+date_and_time
     proxie = random.choice(proxies_list)
+    count = 5
+    num = 0
     try:
-        async with httpx.AsyncClient(proxies=proxie, timeout=240, verify=False) as client:
-           wb_data = await client.get(api_url_yestarday, headers=headers)
-        if wb_data.status_code != 200:
-            return {}
+        while num <= count:
+            async with httpx.AsyncClient(proxies=proxie, timeout=240, verify=False) as client:
+               wb_data = await client.get(api_url_yestarday, headers=headers)
+            if wb_data.status_code != 200:
+                magnifier_count_of_proxie_using(proxie, err=True)
+                proxie = random.choice(proxies_list)
+                num += 1
+            else:
+                magnifier_count_of_proxie_using(proxie)
+                break
     except Exception as e:
         logger.error(f"proxie=>{proxie}, ошибка в функции get_data_from_wb: {e}")
         magnifier_count_of_proxie_using(proxie, err=True)
+        return {}
+    if wb_data.status_code != 200:
         return {}
     operations = wb_data.json()
     if isinstance(operations, list):
@@ -175,12 +185,19 @@ async def get_stocks_from_wb(api_key: str) -> List[dict]:
     date_and_time = (datetime.datetime.today() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
     api_url_stocks = settings.stockurl+"?dateFrom="+date_and_time
     proxie = random.choice(proxies_list)
+    count = 5
+    num = 0
     try:
-        async with httpx.AsyncClient(proxies=proxie, timeout=240, verify=False) as client:
-            stocks = await client.get(api_url_stocks, headers=headers)
-        if stocks.status_code != 200:
-            logger.warning(f"proxie=>{proxie}, result: {stocks.status_code} ")
-            return {}
+        while num <= count:
+            async with httpx.AsyncClient(proxies=proxie, timeout=240, verify=False) as client:
+                stocks = await client.get(api_url_stocks, headers=headers)
+            if stocks.status_code != 200:
+                magnifier_count_of_proxie_using(proxie, err=True)
+                proxie = random.choice(proxies_list)
+                num += 1
+            else:
+                magnifier_count_of_proxie_using(proxie)
+                break
         return stocks.json()
     except Exception as e:
         logger.error(f"proxie=>{proxie}, ошибка в функции get_stocks_from_wb:  {e}")
