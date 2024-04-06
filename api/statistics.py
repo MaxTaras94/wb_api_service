@@ -6,7 +6,7 @@ import orm
 from typing import List
 from fastapi import APIRouter, Depends, status
 from fastapi.responses import JSONResponse
-from start_monitoring import try_to_get_data_from_wb
+from start_monitoring_new import try_to_get_data_from_wb
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,10 +29,10 @@ async def get_statistics(user_telegram_id: int,
     api_key = results.scalar()
     date_today = datetime.datetime.today()
     date_and_time_yestarday = (datetime.datetime.today() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
-    orders: List[dict] = await try_to_get_data_from_wb(settings.ordersurl, 
+    orders: List[dict] = try_to_get_data_from_wb(settings.ordersurl, 
                                                 api_key
                                                 )
-    sales_and_refunds: List[dict] = await try_to_get_data_from_wb(settings.salesurl, 
+    sales_and_refunds: List[dict] = try_to_get_data_from_wb(settings.salesurl, 
                                                                    api_key
                                                                    )
     try:

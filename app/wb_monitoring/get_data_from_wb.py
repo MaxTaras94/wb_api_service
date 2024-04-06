@@ -12,7 +12,9 @@ import httpx
 import json
 import math
 import random
+import requests
 from typing import Dict, List, Tuple
+import time
 import urllib.request
 from urllib.parse import quote
 
@@ -20,7 +22,6 @@ from urllib.parse import quote
 with open('./proxies_list.json') as f:
     data = json.load(f)
     proxies_list = data['proxies']
-print(proxies_list)
 
 total_counter_for_proxies = {}
 
@@ -49,14 +50,14 @@ def get_count_of_operations_for_barcode(operations: List[dict]
         o["count_of_operations"] = barcodes_and_count_of_operations[o['barcode']]
     return operations
     
-async def dynamics_operations_on_barcodes(operations: List[dict],
+def dynamics_operations_on_barcodes(operations: List[dict],
                                           list_of_warehouses: List[dict],
                                           api_key: str
                                           ) -> Dict[str, int]:
     '''Функция обогащает данные об операциях данными о статистике этих самых операций за последие 7 ней + данными об FBS остатках, если селлер работает по такой модели
     '''
     for num, warehouse in enumerate(list_of_warehouses):
-        all_warehouse_stocks = await get_all_warehouse_stocks(api_key, warehouse['id'], get_all_barcodes(operations))
+        all_warehouse_stocks = get_all_warehouse_stocks(api_key, warehouse['id'], get_all_barcodes(operations))
         if isinstance(all_warehouse_stocks, dict):
             return {}
         list_of_warehouses[num]['stocks'] = {item['sku']: item['amount'] for item in all_warehouse_stocks['stocks']}  
@@ -84,7 +85,7 @@ def operations_sorter(operations: List[dict]) -> List[dict]:
         parsed_operations.append(operation)
     return sorted(parsed_operations, key=lambda d: d["parsed_date"])
 
-async def get_all_warehouse_stocks(api_key: str,
+def get_all_warehouse_stocks(api_key: str,
                                    warehouseId: int,
                                    barcodes: List[str]
                                    ) -> List[dict]:
@@ -97,8 +98,7 @@ async def get_all_warehouse_stocks(api_key: str,
     magnifier_count_of_proxie_using(proxie)
     try:
         while not checking: 
-            async with httpx.AsyncClient(proxies=proxie, timeout=240, verify=False) as client:
-                warehouse_stocks = await client.post(settings.warehouses_stocks+'/'+str(warehouseId), headers=headers, json={'skus':barcodes})
+            warehouse_stocks = requests.post(settings.warehouses_stocks+'/'+str(warehouseId), headers=headers, proxies={'http':proxie}, json={'skus':barcodes})
             if warehouse_stocks.status_code == 200:
                 checking = True
             else:
@@ -113,8 +113,7 @@ async def get_all_warehouse_stocks(api_key: str,
     return warehouse_stocks.json()
     
 
-
-async def get_all_warehouses(api_key: str) -> List[dict]:
+def get_all_warehouses(api_key: str) -> List[dict]:
     '''Функция возвращает список всех пользовательских складов
     '''
     headers = {"Authorization": api_key, "content-Type": "application/json"}
@@ -123,8 +122,7 @@ async def get_all_warehouses(api_key: str) -> List[dict]:
     proxie = random.choice(proxies_list)
     try:
         while not checking:
-            async with httpx.AsyncClient(proxies=proxie, timeout=240, verify=False) as client:
-                warehouses = await client.get(settings.warehouses, headers=headers)
+            warehouses = requests.get(settings.warehouses, headers=headers, proxies={'http':proxie})
             if warehouse_stocks.status_code == 200:
                 checking = True
             else:
@@ -138,7 +136,7 @@ async def get_all_warehouses(api_key: str) -> List[dict]:
         return "error"
     return warehouse_stocks.json()
         
-async def get_data_from_wb(link_operation_wb: str,
+def get_data_from_wb(link_operation_wb: str,
                            api_key: str) -> List[dict]:
     '''Функция возвращает данные о заказах/продажах/возвратах из API WB 
     '''
@@ -146,12 +144,11 @@ async def get_data_from_wb(link_operation_wb: str,
     date_and_time = (datetime.datetime.today() - datetime.timedelta(days=8)).strftime("%Y-%m-%d")
     api_url_yestarday = link_operation_wb+"?dateFrom="+date_and_time
     proxie = random.choice(proxies_list)
-    count = 5
+    count = 10
     num = 0 
     while num <= count:
         try:
-            async with httpx.AsyncClient(proxies=proxie, timeout=240) as client:
-               wb_data = await client.get(api_url_yestarday, headers=headers)
+            wb_data = requests.get(api_url_yestarday, headers=headers, proxies={'http':proxie}, timeout=180)
             if wb_data.status_code != 200:
                 magnifier_count_of_proxie_using(proxie, err=True)
                 # proxie = random.choice(proxies_list)
@@ -160,11 +157,12 @@ async def get_data_from_wb(link_operation_wb: str,
             else:
                 magnifier_count_of_proxie_using(proxie)
                 break
-        except Exception as e:
-            logger.error(f"proxie=>{proxie}, ошибка в функции get_data_from_wb: {e}")
+        except Exception:
+            logger.error(f"proxie=>{proxie}, ошибка в функции get_data_from_wb")
+            import traceback
+            logger.error(traceback.format_exc())
             magnifier_count_of_proxie_using(proxie, err=True)
             # proxie = random.choice(proxies_list)
-            logger.info(f'get_data_from_wb, попытка №{num}')
             num += 1
             continue
     if wb_data.status_code != 200:
@@ -172,29 +170,28 @@ async def get_data_from_wb(link_operation_wb: str,
     operations = wb_data.json()
     if isinstance(operations, list):
         operation_with_dynamics = get_count_of_operations_for_barcode(operations)
-        all_warehouses = await get_all_warehouses(api_key)
+        all_warehouses = get_all_warehouses(api_key)
         if all_warehouses == "error":    
             return operation_with_dynamics
         else:
-            upgrade_operations = await dynamics_operations_on_barcodes(operation_with_dynamics, all_warehouses, api_key) #обогащаем операции данными об остатках со складов селлера
+            upgrade_operations = dynamics_operations_on_barcodes(operation_with_dynamics, all_warehouses, api_key) #обогащаем операции данными об остатках со складов селлера
             if isinstance(upgrade_operations, dict):
                 return operation_with_dynamics
             return upgrade_operations
     return operations
     
-async def get_stocks_from_wb(api_key: str) -> List[dict]:
+def get_stocks_from_wb(api_key: str) -> List[dict]:
     '''Функция возвращает данные об остатках из API WB 
     '''
     headers = {"Authorization": api_key, "content-Type": "application/json"}
     date_and_time = (datetime.datetime.today() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
     api_url_stocks = settings.stockurl+"?dateFrom="+date_and_time
     proxie = random.choice(proxies_list)
-    count = 5
+    count = 10
     num = 0
     while num <= count:
         try:
-            async with httpx.AsyncClient(proxies=proxie, timeout=240) as client:
-                stocks = await client.get(api_url_stocks, headers=headers)
+            stocks = requests.get(api_url_stocks, headers=headers, proxies={'http':proxie}, timeout=180)
             if stocks.status_code != 200:
                 magnifier_count_of_proxie_using(proxie, err=True)
                 # proxie = random.choice(proxies_list)
@@ -203,61 +200,60 @@ async def get_stocks_from_wb(api_key: str) -> List[dict]:
             else:
                 magnifier_count_of_proxie_using(proxie)
                 break
-        except Exception as e:
-            logger.error(f"proxie=>{proxie}, ошибка в функции get_stocks_from_wb:  {e}")
+        except Exception:
+            import traceback
+            logger.error(traceback.format_exc())
+            logger.error(f"proxie=>{proxie}, ошибка в функции get_stocks_from_wb")
             magnifier_count_of_proxie_using(proxie, err=True)
             # proxie = random.choice(proxies_list)
             num += 1
-            logger.info(f'get_stocks_from_wb, попытка №{num}')
             continue
     return stocks.json()
     
         
-async def update_status_subscribe_in_db(tg_user_id: int,
+def update_status_subscribe_in_db(tg_user_id: int,
                                         is_subscriber: bool
                                         ) -> None:
-    async with httpx.AsyncClient(timeout=240, verify=False) as client:
-        res = await client.post(settings.server_host + f"/api/checksubscribe/update_status_subscription/",
+    res = requests.post(settings.server_host + f"/api/checksubscribe/update_status_subscription/",
                           json={'tg_user_id': tg_user_id,
                                 'is_subscriber': is_subscriber
                                }
                           ) 
     logger.info(f'update_status_subscribe_in_db: => {res.json()}')
 
-async def sender_messeges_to_telegram(data_for_msg: dict,
-                                      subscription: OperationRegroupedDataResponse,
-                                      type_operation: str = None
-                                      ) -> bool:   
+def sender_messeges_to_telegram(data_for_msg: dict,
+                                  subscription: OperationRegroupedDataResponse,
+                                  type_operation: str = None
+                                  ) -> bool:   
     try:
         name_template = 'msg_with_orders_for_client.j2' if type_operation == "1" else "msg_with_sales_and_refunds_for_client.j2"
         telegram_ids = list(subscription['users'][type_operation]['telegram_ids'].keys())
         for num, tg_user_id in enumerate(telegram_ids):
             is_subscriber = subscription['users'][type_operation]['telegram_ids'][tg_user_id]['is_subscriber']
-            async with httpx.AsyncClient(timeout=240) as client:
-                data = await client.get(settings.server_host + f"/api/checksubscribe/get_current_status/{tg_user_id}")
+            data = requests.get(settings.server_host + f"/api/checksubscribe/get_current_status/{tg_user_id}")
             is_subscriber_db = data.json()
             logger.info(f"subscription['api_key'] = {subscription['api_key']}\nis_subscriber = {is_subscriber} | is_subscriber_db = {is_subscriber_db} ")
             if is_subscriber or is_subscriber is None:
                 name_key = subscription['users'][type_operation]['names_wb_key'][num]
                 data_for_msg['name_key'] = name_key if name_key is not None else subscription['api_key'][:10]+"..."+subscription['api_key'][-10:]
                 text_msg = render_template(name_template, data={'data':data_for_msg, 'quote':quote, 'len': len})
-                status_sending = await send_message_to_tg(tg_user_id, text_msg, data_for_msg['img'])
+                status_sending = send_message_to_tg(tg_user_id, text_msg, data_for_msg['img'])
                 if not is_subscriber_db["is_subscriber"]:
-                    await update_status_subscribe_in_db(tg_user_id, True)
+                    update_status_subscribe_in_db(tg_user_id, True)
             else:
                 if is_subscriber_db["is_subscriber"]:
                     text_msg = render_template("no_send_alert_of_new_operations.j2")
-                    status_sending = await send_message_to_tg(tg_user_id, text_msg, "")
-                    await update_status_subscribe_in_db(tg_user_id, False) 
+                    status_sending = send_message_to_tg(tg_user_id, text_msg, "")
+                    update_status_subscribe_in_db(tg_user_id, False) 
             logger.info(f"Статус отправки сообщения в тг, ф-ция sender_messeges_to_telegram:  {status_sending}")
-        await asyncio.sleep(0.1)
+        time.sleep(0.1)
         return True
     except Exception:
         import traceback
         logger.error(traceback.format_exc())
         return False
 
-async def generic_link_for_nmId_img(nmId: int) -> str:
+def generic_link_for_nmId_img(nmId: int) -> str:
     '''Функция на вход получает артикул товара WB :nmId: и возвращает ссылку на картинку для этого артикула
     '''
     nmId_str = str(nmId)
@@ -269,8 +265,7 @@ async def generic_link_for_nmId_img(nmId: int) -> str:
             photo_url = f'https://basket-{N}.wb.ru/vol{nmId_str[0:4]}/part{nmId_str[0:6]}/{nmId_str}/images/big/1.webp'
         elif len(nmId_str) == 8:
             photo_url = f'https://basket-{N}.wb.ru/vol{nmId_str[0:3]}/part{nmId_str[0:5]}/{nmId_str}/images/big/1.webp'            
-        async with httpx.AsyncClient(timeout=240, verify=False) as client:
-            img_res = await client.get(photo_url)
+        img_res = requests.get(photo_url)
         status_code = img_res.status_code
         if status_code == 200:
             return photo_url
@@ -279,41 +274,38 @@ async def generic_link_for_nmId_img(nmId: int) -> str:
     else:
         return ""
 
-async def get_last_time_operation(id_:int,
-                                  id_wb_key: int,
-                                  date_today: datetime.datetime
-                                  ) -> datetime.datetime:
+def get_last_time_operation(id_:int,
+                              id_wb_key: int,
+                              date_today: datetime.datetime
+                              ) -> datetime.datetime:
     '''Функция возвращает из БД время последней операции в WB 
     '''
-    async with httpx.AsyncClient(timeout=240, verify=False) as client:
-        res = await client.get(f'{settings.server_host}/api/notifications/get_time_last_in_wb/?id_={id_}&wb_api_keys_id={id_wb_key}')
+    res = requests.get(f'{settings.server_host}/api/notifications/get_time_last_in_wb/?id_={id_}&wb_api_keys_id={id_wb_key}')
     time_last_operation = res.json()
     time_last_operation = datetime.datetime.fromisoformat(time_last_operation['data']) if time_last_operation['data'] is not None \
     else datetime.datetime.today() - datetime.timedelta(minutes=40)
     return time_last_operation
 
 
-async def update_time_last_in_wb(id_operation: int,
+def update_time_last_in_wb(id_operation: int,
                                  id_wb_key: int,
                                  date_and_time_operation: str
                                  ) -> None:
     '''Функция обновляет данные в БД по последней операции
     '''
-    async with httpx.AsyncClient(timeout=240, verify=False) as client:
-        await client.post(f'{settings.server_host}/api/notifications/update_time_last_in_wb/',
+    requests.post(f'{settings.server_host}/api/notifications/update_time_last_in_wb/',
                            json={'id_':id_operation,
                                        'wb_api_keys_id':id_wb_key,
                                        'time_last_in':date_and_time_operation
                                 }
                          )
 
-async def get_feedback_and_rating(nmId: int) -> tuple:
+def get_feedback_and_rating(nmId: int) -> tuple:
     '''Функция возвращает данные отзывы и рейтинг для артикула :nmId:
     '''
     api_url = f"https://card.wb.ru/cards/detail?curr=rub&dest=123585628&nm={nmId}" # ссыль для получения данных о кол-ве отзывов и рейтинге для nmId
     try:
-        async with httpx.AsyncClient(timeout=240, verify=False) as client:
-            res = await client.get(api_url)
+        res = requests.get(api_url)
         response = res.json()
         data = response["data"]["products"][0]
         return data["feedbacks"], data["reviewRating"]
@@ -331,7 +323,7 @@ def get_unique_warehouesa_stock(stocks_for_nmId: List[dict]) -> List[dict]:
             unique_dict[wh_name] = d
     return list(unique_dict.values())                    
 
-async def parsing_order_data(orders_from_wb: List[List[dict]],
+def parsing_order_data(orders_from_wb: List[List[dict]],
                              subscription: OperationRegroupedDataResponse
                              ) -> None:
     '''Функция на вход получает ответ от API WB о заказах
@@ -340,7 +332,7 @@ async def parsing_order_data(orders_from_wb: List[List[dict]],
     logger.info(f'В ф-ции parsing_order_data. Передан subscription => {subscription}')
     date_today_str = datetime.datetime.today().strftime("%Y-%m-%d")
     date_today = datetime.datetime.strptime(date_today_str, "%Y-%m-%d") 
-    time_last_order_in_wb_from_db = await get_last_time_operation(1, subscription['users']['1']['ids_wb_key'][0], date_today)
+    time_last_order_in_wb_from_db = get_last_time_operation(1, subscription['users']['1']['ids_wb_key'][0], date_today)
     stocks = orders_from_wb[1]
     orders = operations_sorter(orders_from_wb[0])
     time_last_order_in_wb = time_last_order_in_wb_from_db
@@ -353,8 +345,8 @@ async def parsing_order_data(orders_from_wb: List[List[dict]],
                     stocks_for_nmId_order = [_ for _ in stocks if _['nmId'] == order["nmId"]]
                     unique_stocks = get_unique_warehouesa_stock(stocks_for_nmId_order)
                     time_last_order_in_wb = date_and_time_order
-                    feedbacks, reviewRating = await get_feedback_and_rating(order["nmId"])
-                    img_link = await generic_link_for_nmId_img(order["nmId"])
+                    feedbacks, reviewRating = get_feedback_and_rating(order["nmId"])
+                    img_link = generic_link_for_nmId_img(order["nmId"])
                     stocks_on_warehouses = order.get('stocks_on_warehouses', [])
                     in_way_to_client = 0
                     in_way_from_client = 0
@@ -405,10 +397,10 @@ async def parsing_order_data(orders_from_wb: List[List[dict]],
                         "inWayToClient": digit_separator(in_way_to_client),
                         "inWayFromClient": digit_separator(in_way_from_client)
                     }    
-                    status_send_msg_in_tg = await sender_messeges_to_telegram(data_for_msg, subscription, type_operation = '1')
+                    status_send_msg_in_tg = sender_messeges_to_telegram(data_for_msg, subscription, type_operation = '1')
         if status_send_msg_in_tg:
             for id_wb_key in subscription['users']['1']['ids_wb_key']:           
-                await update_time_last_in_wb(1, id_wb_key, time_last_order_in_wb.isoformat())
+                update_time_last_in_wb(1, id_wb_key, time_last_order_in_wb.isoformat())
     except Exception:
         import traceback
         logger.error(traceback.format_exc())
@@ -423,8 +415,8 @@ async def parsing_sales_refunds_data(operations_from_wb: List[List[dict]],
     logger.info(f'В ф-ции parsing_sales_refunds_data. Передан subscription => {subscription}')
     date_today_str = datetime.datetime.today().strftime("%Y-%m-%d")
     date_today = datetime.datetime.strptime(date_today_str, "%Y-%m-%d")
-    time_last_sale_in_wb_from_db = await get_last_time_operation(2, subscription['users']['2']['ids_wb_key'][0], date_today)
-    time_last_refund_in_wb_from_db = await get_last_time_operation(3, subscription['users']['3']['ids_wb_key'][0], date_today)
+    time_last_sale_in_wb_from_db = get_last_time_operation(2, subscription['users']['2']['ids_wb_key'][0], date_today)
+    time_last_refund_in_wb_from_db = get_last_time_operation(3, subscription['users']['3']['ids_wb_key'][0], date_today)
     stocks = operations_from_wb[1]
     operations = operations_sorter(operations_from_wb[0])
     time_last_sale_in_wb = time_last_sale_in_wb_from_db
@@ -439,8 +431,8 @@ async def parsing_sales_refunds_data(operations_from_wb: List[List[dict]],
                 date_and_time_operation > time_last_refund_in_wb_from_db:
                     stocks_for_nmId_operation = [_ for _ in stocks if _['nmId'] == operation["nmId"]]
                     unique_stocks = get_unique_warehouesa_stock(stocks_for_nmId_operation)
-                    feedbacks, reviewRating = await get_feedback_and_rating(operation["nmId"])
-                    img_link = await generic_link_for_nmId_img(operation["nmId"])
+                    feedbacks, reviewRating = get_feedback_and_rating(operation["nmId"])
+                    img_link = generic_link_for_nmId_img(operation["nmId"])
                     time_last_sale_in_wb = date_and_time_operation if operation["saleID"][0] == "S" else time_last_sale_in_wb_from_db
                     time_last_refund_in_wb = date_and_time_operation if operation["saleID"][0] == "R" else time_last_refund_in_wb_from_db
                     stocks_on_warehouses = operation.get('stocks_on_warehouses', [])
@@ -497,14 +489,14 @@ async def parsing_sales_refunds_data(operations_from_wb: List[List[dict]],
                         "inWayFromClient": digit_separator(in_way_from_client)
                     }    
                     if data_for_msg["typeOperation"] == "Продажа 💰":
-                        status_send_msg_sell_in_tg = await sender_messeges_to_telegram(data_for_msg, subscription, type_operation = '2')
+                        status_send_msg_sell_in_tg = sender_messeges_to_telegram(data_for_msg, subscription, type_operation = '2')
                         status_send_msg_ref_in_tg = False
                     else:
-                        status_send_msg_ref_in_tg = await sender_messeges_to_telegram(data_for_msg, subscription, type_operation = '3')
+                        status_send_msg_ref_in_tg = sender_messeges_to_telegram(data_for_msg, subscription, type_operation = '3')
                         status_send_msg_sell_in_tg = False
         if status_send_msg_sell_in_tg: 
             for id_wb_key in subscription['users']['2']['ids_wb_key']:           
-                await update_time_last_in_wb(2, id_wb_key, time_last_sale_in_wb.isoformat())
+                update_time_last_in_wb(2, id_wb_key, time_last_sale_in_wb.isoformat())
         if status_send_msg_ref_in_tg:
             for id_wb_key in subscription['users']['3']['ids_wb_key']:   
                 await update_time_last_in_wb(3, id_wb_key, time_last_refund_in_wb.isoformat())

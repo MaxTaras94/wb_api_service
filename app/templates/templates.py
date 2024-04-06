@@ -9,9 +9,9 @@ def render_template(template_name: str, data: dict = None) -> str:
         data = {}
     template = _get_template_env().get_template(template_name)
     rendered = template.render(**data).replace("\n", " ")
-    rendered = rendered.replace("<br>", "%0A")
+    rendered = rendered.replace("<br>", "\n")
     rendered = re.sub(" +", " ", rendered).replace(" .", ".").replace(" ,", ",")
-    rendered = "%0A".join(line.strip() for line in rendered.split("%0A"))
+    rendered = "\n".join(line.strip() for line in rendered.split("\n"))
     rendered = rendered.replace("{FOURPACES}", "    ")
     return rendered
 

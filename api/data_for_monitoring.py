@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Dict, List, Optional, Union
+import time
 
 
 
@@ -58,7 +59,7 @@ class OperationDataListSimpleResponse(BaseModel):
 router = APIRouter()
 
 
-async def regrouper_func(data: OperationDataListResponse,
+def regrouper_func(data: OperationDataListResponse,
                          is_checking_subscription: bool
                          ) -> OperationRegroupedDataListResponse:
     '''Функция для удобства работы с данными выполняет из перегруппировку и возвращает обратно
@@ -78,11 +79,11 @@ async def regrouper_func(data: OperationDataListResponse,
             result[operation_id]['names_wb_key'].append(d['names_wb_key'][i])
             if d['telegram_ids'][i] not in cache:
                 if is_checking_subscription:
-                    cache[d['telegram_ids'][i]] = await check_user_is_subscriber_channel(d['telegram_ids'][i])
+                    cache[d['telegram_ids'][i]] = check_user_is_subscriber_channel(d['telegram_ids'][i])
                 else:
                     cache[d['telegram_ids'][i]] = None # это запись будет означать что мы не проверяли подписан ли пользователь на канал или нет
             result[operation_id]['telegram_ids'][d['telegram_ids'][i]] = {'is_subscriber': cache[d['telegram_ids'][i]]}
-            await asyncio.sleep(0.05)
+            time.sleep(0.05)
         new_data.append({"api_key": d['api_key'], "users": result})
     return new_data
     
@@ -149,7 +150,7 @@ async def get_data_for_all_users(data: Dict[str, List[int] | bool],
         response_data_intermediate = [
             OperationDataResponse.model_validate(u).model_dump() for u in data_for_monitoring
         ]
-        response_data = await regrouper_func(response_data_intermediate, data['is_checking_subscription'])
+        response_data = regrouper_func(response_data_intermediate, data['is_checking_subscription'])
         return JSONResponse(
         content={
             "status": "ok",

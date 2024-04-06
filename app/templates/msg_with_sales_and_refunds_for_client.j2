@@ -4,8 +4,8 @@
 🛍️ WB скидка: {{data['spp_sum']}}₽ ({{data['spp_percent']}}%)<br>
 📈 Сегодня всего: <b>{{data['total_count_operations_today']}} шт. на {{data['total_sum_operations_today']}}₽</b><br>
 🆔 Артикул: <a href="https://www.wildberries.ru/catalog/{{data['nmId']}}/detail.aspx?targetUrl=SP">{{data['nmId']}}</a><br>
-📂 {{quote(data['subject'])}}<br>
-™️ {{quote(data['brand'])}}<br>
+📂 {{data['subject']}}<br>
+™️ {{data['brand']}}<br>
 {% if data['techSize'] != '0' %}
 📏Размер: <b>{{data['techSize']}}</b><br>
 {% endif %}
