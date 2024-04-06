@@ -6,7 +6,7 @@ import orm
 from typing import List
 from fastapi import APIRouter, Depends, status
 from fastapi.responses import JSONResponse
-from start_monitoring_new import try_to_get_data_from_wb
+from start_monitoring import try_to_get_data_from_wb
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
