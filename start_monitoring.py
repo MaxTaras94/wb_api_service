@@ -136,16 +136,24 @@ async def check_operations() -> None:
             tasks.extend(create_task_list(stocks_wb, subscription))
     await asyncio.gather(*tasks, return_exceptions=True)
 
-
-if __name__ == "__main__":
+async def run_scheduler():
     try:
         scheduler = AsyncIOScheduler()
         scheduler.add_job(check_operations, 'interval', minutes=3)
         scheduler.start()
+
+        while True:
+            await asyncio.sleep(1)
     except Exception:
         import traceback
         logger.error(traceback.format_exc())
+
+if __name__ == "__main__":
+    loop = asyncio.get_event_loop()
     try:
-        asyncio.get_event_loop().run_forever()
+        loop.create_task(run_scheduler())
+        loop.run_forever()
     except (KeyboardInterrupt, SystemExit):
         pass
+    finally:
+        loop.close()
