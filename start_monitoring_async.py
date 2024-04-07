@@ -34,13 +34,14 @@ async def is_checking_subscription() -> bool:
         logger.error(traceback.format_exc())
         return None
         
-async def try_to_get_stocks(api_key: str) -> List[dict]:
+async def try_to_get_stocks(api_key: str,
+                            use_proxy=False) -> List[dict]:
     '''Функция для получения остатков со складов ВБ. Она нужна для повторения попыток получить остатки, если с первого раза ВБ вернул ошибку
     '''
     count_try = 4
     num = 0
     while num <= count_try:
-        stocks_wb = await get_stocks_from_wb(api_key)
+        stocks_wb = await get_stocks_from_wb(api_key, use_proxy)
         if isinstance(stocks_wb, dict):
             num += 1
         else:
@@ -48,14 +49,15 @@ async def try_to_get_stocks(api_key: str) -> List[dict]:
     return stocks_wb
 
 async def try_to_get_data_from_wb(url_for_req: str,
-                                  api_key: str
+                                  api_key: str,
+                                  use_proxy=None
                                   ) -> List[dict]:
     '''Функция для получения данных по операциям  ВБ. Она нужна для повторения попыток получить данные, если с первого раза ВБ вернул ошибку
     '''
     count_try = 4
     num = 0
     while num <= count_try:
-        data_from_wb = await get_data_from_wb(url_for_req, api_key)
+        data_from_wb = await get_data_from_wb(url_for_req, api_key, use_proxy)
         if isinstance(data_from_wb, dict):
             num += 1
         else:
@@ -80,8 +82,9 @@ async def process_get_data(url_for_req: str,
     '''В этой функции получается инфа от ВБ и отправляется на парсинг в соответствующие ф-ции, в зависимости от типа операции
     '''
     data_from_wb: List[dict] = await try_to_get_data_from_wb(url_for_req, 
-                                                          subscription['api_key']
-                                                          )
+                                                              subscription['api_key'],
+                                                              use_proxy=True
+                                                              )
     if all([isinstance(data_from_wb, list), isinstance(stocks_wb, list)]):
         if 'orders' in url_for_req:
             parsing_data = await parsing_order_data([data_from_wb, stocks_wb], subscription)
@@ -128,19 +131,19 @@ async def check_operations() -> None:
             subscription['users'][key]['telegram_ids'].keys()] for key in subscription['users'].keys()])) #получаем список значений по ключу is_subscriber для каждого tg id из списка
             logger.info(f'В ф-ции check_operations. user_is_subscriber_channel = {user_is_subscriber_channel}')
             if any(user_is_subscriber_channel): #проверяем есть ли пользователи подписанные на канал
-                stocks_wb = await try_to_get_stocks(subscription['api_key'])
+                stocks_wb = await try_to_get_stocks(subscription['api_key'], use_proxy=True)
                 tasks.extend(create_task_list(stocks_wb, subscription))
             else:
                 await sender_messeges_to_telegram({}, subscription, "1")
         else:
-            stocks_wb = await try_to_get_stocks(subscription['api_key'])
+            stocks_wb = await try_to_get_stocks(subscription['api_key'], use_proxy=True)
             tasks.extend(create_task_list(stocks_wb, subscription))
     await asyncio.gather(*tasks, return_exceptions=True)
 
 if __name__ == "__main__":
     try:
         scheduler = AsyncIOScheduler()
-        scheduler.add_job(check_operations, 'interval', minutes=3)
+        scheduler.add_job(check_operations, 'interval', minutes=5)
         scheduler.start()
     except Exception:
         import traceback

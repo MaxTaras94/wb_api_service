@@ -11,7 +11,7 @@ import urllib.parse
 
 
 
-def send_message_to_tg(tg_user_id: int,
+async def send_message_to_tg(tg_user_id: int,
                              text_message: str,
                              link_img: str
                              ) -> dict:
@@ -21,19 +21,21 @@ def send_message_to_tg(tg_user_id: int,
     else:
         url = f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendMessage?chat_id={str(tg_user_id)}&text={encoded_text_message}&parse_mode=HTML"
     try:
-        response = requests.get(url)
-        data = response.json()
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as response:
+                data = await response.json()
         return {'status': data['ok'], 'tg_user_id': tg_user_id}
     except Exception as e:
         logger.error(e)
         return {'status': data['ok'], 'error': e, 'tg_user_id': tg_user_id}
         
-def check_user_is_subscriber_channel(tg_user_id: int) -> bool:
+async def check_user_is_subscriber_channel(tg_user_id: int) -> bool:
     '''Функция возвращает True, если пользователь подписан на канал. Иначе возвращает False
     '''
     url = f"https://api.telegram.org/bot{settings.telegram_bot_token}/getChatMember?chat_id=@xoxlov_maxim&user_id={str(tg_user_id)}"
-    subscribe = requests.get(url)
-    data = subscribe.json()
+    async with aiohttp.ClientSession() as session:
+            async with session.get(url) as response:
+                data = await response.json()
     if data['ok'] == False or data['result']['status'] == 'left':
         return False
     else:

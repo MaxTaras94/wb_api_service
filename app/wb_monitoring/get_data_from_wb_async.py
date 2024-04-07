@@ -139,37 +139,26 @@ async def get_all_warehouses(api_key: str) -> List[dict]:
     return warehouse_stocks.json()
         
 async def get_data_from_wb(link_operation_wb: str,
-                           api_key: str) -> List[dict]:
+                           api_key: str,
+                           use_proxy=False) -> List[dict]:
     '''Функция возвращает данные о заказах/продажах/возвратах из API WB 
     '''
     headers = {"Authorization": api_key, "content-Type": "application/json"}
     date_and_time = (datetime.datetime.today() - datetime.timedelta(days=8)).strftime("%Y-%m-%d")
     api_url_yestarday = link_operation_wb+"?dateFrom="+date_and_time
     proxie = random.choice(proxies_list)
-    count = 5
-    num = 0 
-    while num <= count:
+    data_for_res = {"proxies": proxie, "timeout": 240} if use_proxy else {"timeout": 240}
+    async with httpx.AsyncClient(**data_for_res) as client:
         try:
-            async with httpx.AsyncClient(proxies=proxie, timeout=240) as client:
-               wb_data = await client.get(api_url_yestarday, headers=headers)
-            if wb_data.status_code != 200:
-                magnifier_count_of_proxie_using(proxie, err=True)
-                # proxie = random.choice(proxies_list)
-                num += 1
-                logger.info(f'get_data_from_wb, попытка №{num}')
-            else:
-                magnifier_count_of_proxie_using(proxie)
-                break
-        except Exception as e:
-            logger.error(f"proxie=>{proxie}, ошибка в функции get_data_from_wb: {e}")
+            wb_data = await client.get(api_url_yestarday, headers=headers)
+        except:
             magnifier_count_of_proxie_using(proxie, err=True)
-            # proxie = random.choice(proxies_list)
-            logger.info(f'get_data_from_wb, попытка №{num}')
-            num += 1
-            continue
+            return {}
     if wb_data.status_code != 200:
+        magnifier_count_of_proxie_using(proxie, err=True)
         return {}
     operations = wb_data.json()
+    magnifier_count_of_proxie_using(proxie)
     if isinstance(operations, list):
         operation_with_dynamics = get_count_of_operations_for_barcode(operations)
         all_warehouses = await get_all_warehouses(api_key)
@@ -182,36 +171,25 @@ async def get_data_from_wb(link_operation_wb: str,
             return upgrade_operations
     return operations
     
-async def get_stocks_from_wb(api_key: str) -> List[dict]:
+async def get_stocks_from_wb(api_key: str, use_proxy=False) -> List[dict]:
     '''Функция возвращает данные об остатках из API WB 
     '''
     headers = {"Authorization": api_key, "content-Type": "application/json"}
     date_and_time = (datetime.datetime.today() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
     api_url_stocks = settings.stockurl+"?dateFrom="+date_and_time
     proxie = random.choice(proxies_list)
-    count = 5
-    num = 0
-    while num <= count:
+    data_for_res = {"proxies": proxie, "timeout": 240} if use_proxy else {"timeout": 240}
+    async with httpx.AsyncClient(**data_for_res) as client:
         try:
-            async with httpx.AsyncClient(proxies=proxie, timeout=240) as client:
-                stocks = await client.get(api_url_stocks, headers=headers)
-            if stocks.status_code != 200:
-                magnifier_count_of_proxie_using(proxie, err=True)
-                # proxie = random.choice(proxies_list)
-                num += 1
-                logger.info(f'get_stocks_from_wb, попытка №{num}')
-            else:
-                magnifier_count_of_proxie_using(proxie)
-                break
-        except Exception as e:
-            logger.error(f"proxie=>{proxie}, ошибка в функции get_stocks_from_wb:  {e}")
+            stocks = await client.get(api_url_stocks, headers=headers)
+        except:
             magnifier_count_of_proxie_using(proxie, err=True)
-            # proxie = random.choice(proxies_list)
-            num += 1
-            logger.info(f'get_stocks_from_wb, попытка №{num}')
-            continue
+            return {}
+    if stocks.status_code != 200:
+        magnifier_count_of_proxie_using(proxie, err=True)
+        return {}
+    magnifier_count_of_proxie_using(proxie)
     return stocks.json()
-    
         
 async def update_status_subscribe_in_db(tg_user_id: int,
                                         is_subscriber: bool
