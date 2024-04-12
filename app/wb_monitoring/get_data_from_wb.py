@@ -352,15 +352,15 @@ def parsing_order_data(orders_from_wb: List[List[dict]],
                     in_way_from_client = 0
                     if isinstance(stocks, list):
                         for stock in unique_stocks:
-                            if stock["quantityFull"] > 0:
+                            if stock["quantity"] > 0:
                                 in_way_to_client += stock["inWayToClient"]
                                 in_way_from_client += stock["inWayFromClient"]
-                                if stock["quantityFull"] < order["count_of_operations"]:
+                                if stock["quantity"] < order["count_of_operations"]:
                                     on_count_days = 0
                                 else:
-                                    on_count_days = math.floor(stock["quantityFull"] / order["count_of_operations"])
+                                    on_count_days = math.floor(stock["quantity"] / order["count_of_operations"])
                                 stocks_on_warehouses.append({"warehouse_name": stock["warehouseName"],
-                                                              "stock": stock["quantityFull"],
+                                                              "stock": stock["quantity"],
                                                               "on_count_days": on_count_days
                                                              })
                     total_stocks_on_warehouses = sum([_["stock"] for _ in stocks_on_warehouses])
@@ -440,15 +440,15 @@ async def parsing_sales_refunds_data(operations_from_wb: List[List[dict]],
                     in_way_from_client = 0
                     if isinstance(stocks, list):
                         for stock in unique_stocks:
-                            if stock["nmId"] == operation["nmId"] and stock["quantityFull"] > 0:
+                            if stock["nmId"] == operation["nmId"] and stock["quantity"] > 0:
                                 in_way_to_client += stock["inWayToClient"]
                                 in_way_from_client += stock["inWayFromClient"]
-                                if stock["quantityFull"] < operation["count_of_operations"]:
+                                if stock["quantity"] < operation["count_of_operations"]:
                                     on_count_days = 0
                                 else:
-                                    on_count_days = math.floor(stock["quantityFull"] / operation["count_of_operations"])
+                                    on_count_days = math.floor(stock["quantity"] / operation["count_of_operations"])
                                 stocks_on_warehouses.append({"warehouse_name": stock["warehouseName"],
-                                                              "stock": stock["quantityFull"],
+                                                              "stock": stock["quantity"],
                                                               "on_count_days": on_count_days
                                                              })
                     total_stocks_on_warehouses = sum([_["stock"] for _ in stocks_on_warehouses])
