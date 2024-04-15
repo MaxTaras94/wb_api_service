@@ -59,7 +59,7 @@ class OperationDataListSimpleResponse(BaseModel):
 router = APIRouter()
 
 
-def regrouper_func(data: OperationDataListResponse,
+async def regrouper_func(data: OperationDataListResponse,
                          is_checking_subscription: bool
                          ) -> OperationRegroupedDataListResponse:
     '''Функция для удобства работы с данными выполняет из перегруппировку и возвращает обратно
@@ -79,7 +79,7 @@ def regrouper_func(data: OperationDataListResponse,
             result[operation_id]['names_wb_key'].append(d['names_wb_key'][i])
             if d['telegram_ids'][i] not in cache:
                 if is_checking_subscription:
-                    cache[d['telegram_ids'][i]] = check_user_is_subscriber_channel(d['telegram_ids'][i])
+                    cache[d['telegram_ids'][i]] = await check_user_is_subscriber_channel(d['telegram_ids'][i])
                 else:
                     cache[d['telegram_ids'][i]] = None # это запись будет означать что мы не проверяли подписан ли пользователь на канал или нет
             result[operation_id]['telegram_ids'][d['telegram_ids'][i]] = {'is_subscriber': cache[d['telegram_ids'][i]]}
@@ -150,7 +150,7 @@ async def get_data_for_all_users(data: Dict[str, List[int] | bool],
         response_data_intermediate = [
             OperationDataResponse.model_validate(u).model_dump() for u in data_for_monitoring
         ]
-        response_data = regrouper_func(response_data_intermediate, data['is_checking_subscription'])
+        response_data = await regrouper_func(response_data_intermediate, data['is_checking_subscription'])
         return JSONResponse(
         content={
             "status": "ok",

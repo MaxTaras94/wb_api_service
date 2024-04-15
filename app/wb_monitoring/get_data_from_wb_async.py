@@ -91,52 +91,29 @@ async def get_all_warehouse_stocks(api_key: str,
     '''Функция возвращает остатки товаров со склада продавца по его warehouseId для переданных barcodes
     '''
     headers = {"Authorization": api_key, "content-Type": "application/json"}
-    checking = False
-    num_try = 0
-    proxie = random.choice(proxies_list)
-    magnifier_count_of_proxie_using(proxie)
     try:
-        while not checking: 
-            async with httpx.AsyncClient(proxies=proxie, timeout=240, verify=False) as client:
-                warehouse_stocks = await client.post(settings.warehouses_stocks+'/'+str(warehouseId), headers=headers, json={'skus':barcodes})
-            if warehouse_stocks.status_code == 200:
-                checking = True
-            else:
-                if num_try == 3:
-                    num_try = 0
-                    proxie = random.choice(proxies_list)
-                else:
-                    num_try =+ 1
+        async with httpx.AsyncClient(timeout=240, verify=False) as client:
+            warehouse_stocks = await client.post(settings.warehouses_stocks+'/'+str(warehouseId), headers=headers, json={'skus':barcodes})
+        if warehouse_stocks.status_code == 200:
+            return warehouse_stocks.json()
     except:
-        magnifier_count_of_proxie_using(proxie, err=True)
         return {}
-    return warehouse_stocks.json()
     
-
 
 async def get_all_warehouses(api_key: str) -> Optional[List[dict]]:
     '''Функция возвращает список всех пользовательских складов
     '''
     headers = {"Authorization": api_key, "content-Type": "application/json"}
-    checking = False
-    num_try = 0
-    proxie = random.choice(proxies_list)
     try:
-        while not checking:
-            async with httpx.AsyncClient(proxies=proxie, timeout=240, verify=False) as client:
-                warehouses = await client.get(settings.warehouses, headers=headers)
-            if warehouses.status_code == 200:
-                checking = True
-            else:
-                if num_try == 3:
-                    num_try = 0
-                    proxie = random.choice(proxies_list)
-                else:
-                    num_try =+ 1
+        async with httpx.AsyncClient(timeout=240, verify=False) as client:
+            warehouses = await client.get(settings.warehouses, headers=headers)
+        if warehouses.status_code == 200:
+            return warehouses.json()
+        else:
+            return "error"
+            
     except:
-        magnifier_count_of_proxie_using(proxie, err=True)
         return "error"
-    return warehouses.json()
         
 async def get_data_from_wb(link_operation_wb: str,
                            api_key: str,

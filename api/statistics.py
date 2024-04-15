@@ -30,10 +30,12 @@ async def get_statistics(user_telegram_id: int,
     date_today = datetime.datetime.today()
     date_and_time_yestarday = (datetime.datetime.today() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
     orders: List[dict] = await try_to_get_data_from_wb(settings.ordersurl, 
-                                                       api_key
+                                                       api_key,
+                                                       use_proxy=False
                                                         )
     sales_and_refunds: List[dict] = await try_to_get_data_from_wb(settings.salesurl, 
-                                                                   api_key
+                                                                   api_key,
+                                                                   use_proxy=False
                                                                    )
     try:
         response_data = [{

@@ -16,6 +16,7 @@ import datetime
 import httpx
 import itertools
 import math
+import random
 from typing import Optional, List, Tuple
 import time
 
@@ -50,7 +51,7 @@ async def try_to_get_stocks(api_key: str,
 
 async def try_to_get_data_from_wb(url_for_req: str,
                                   api_key: str,
-                                  use_proxy=None,
+                                  use_proxy=False,
                                   count_try: int = COUNT_TRY
                                   ) -> List[dict]:
     '''Функция для получения данных по операциям  ВБ. Она нужна для повторения попыток получить данные, если с первого раза ВБ вернул ошибку
@@ -83,7 +84,7 @@ async def process_get_data(url_for_req: str,
     '''
     data_from_wb: List[dict] = await try_to_get_data_from_wb(url_for_req, 
                                                               subscription['api_key'],
-                                                              use_proxy=True
+                                                              use_proxy=random.choice([True,False])
                                                               )
     if all([isinstance(data_from_wb, list), isinstance(stocks_wb, list)]):
         if 'orders' in url_for_req:
@@ -143,7 +144,7 @@ async def check_operations() -> None:
 if __name__ == "__main__":
     try:
         scheduler = AsyncIOScheduler()
-        scheduler.add_job(check_operations, 'interval', minutes=5)
+        scheduler.add_job(check_operations, 'interval', minutes=8)
         scheduler.start()
     except Exception:
         import traceback
