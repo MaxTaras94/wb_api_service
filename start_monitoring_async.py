@@ -16,12 +16,12 @@ import datetime
 import httpx
 import itertools
 import math
-from typing import List, Tuple
+from typing import Optional, List, Tuple
 import time
 
+COUNT_TRY = 4 #количество попыток получить ответ на запрос
 
-
-async def is_checking_subscription() -> bool:
+async def is_checking_subscription() -> Optional[bool]:
     '''Функция возвращает из БД False, если проверка подписки не активна, иначе вернёт True
     '''
     try:
@@ -35,10 +35,10 @@ async def is_checking_subscription() -> bool:
         return None
         
 async def try_to_get_stocks(api_key: str,
-                            use_proxy=False) -> List[dict]:
+                            use_proxy=False,
+                            count_try: int = COUNT_TRY) -> List[dict]:
     '''Функция для получения остатков со складов ВБ. Она нужна для повторения попыток получить остатки, если с первого раза ВБ вернул ошибку
     '''
-    count_try = 4
     num = 0
     while num <= count_try:
         stocks_wb = await get_stocks_from_wb(api_key, use_proxy)
@@ -50,11 +50,11 @@ async def try_to_get_stocks(api_key: str,
 
 async def try_to_get_data_from_wb(url_for_req: str,
                                   api_key: str,
-                                  use_proxy=None
+                                  use_proxy=None,
+                                  count_try: int = COUNT_TRY
                                   ) -> List[dict]:
     '''Функция для получения данных по операциям  ВБ. Она нужна для повторения попыток получить данные, если с первого раза ВБ вернул ошибку
     '''
-    count_try = 4
     num = 0
     while num <= count_try:
         data_from_wb = await get_data_from_wb(url_for_req, api_key, use_proxy)

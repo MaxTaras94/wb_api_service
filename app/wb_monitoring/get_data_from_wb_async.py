@@ -12,7 +12,7 @@ import httpx
 import json
 import math
 import random
-from typing import Dict, List, Tuple
+from typing import Dict, Optional, List, Tuple
 import urllib.request
 from urllib.parse import quote
 
@@ -114,7 +114,7 @@ async def get_all_warehouse_stocks(api_key: str,
     
 
 
-async def get_all_warehouses(api_key: str) -> List[dict]:
+async def get_all_warehouses(api_key: str) -> Optional[List[dict]]:
     '''Функция возвращает список всех пользовательских складов
     '''
     headers = {"Authorization": api_key, "content-Type": "application/json"}
@@ -125,7 +125,7 @@ async def get_all_warehouses(api_key: str) -> List[dict]:
         while not checking:
             async with httpx.AsyncClient(proxies=proxie, timeout=240, verify=False) as client:
                 warehouses = await client.get(settings.warehouses, headers=headers)
-            if warehouse_stocks.status_code == 200:
+            if warehouses.status_code == 200:
                 checking = True
             else:
                 if num_try == 3:
@@ -136,11 +136,11 @@ async def get_all_warehouses(api_key: str) -> List[dict]:
     except:
         magnifier_count_of_proxie_using(proxie, err=True)
         return "error"
-    return warehouse_stocks.json()
+    return warehouses.json()
         
 async def get_data_from_wb(link_operation_wb: str,
                            api_key: str,
-                           use_proxy=False) -> List[dict]:
+                           use_proxy=False) -> Optional[List[dict]]:
     '''Функция возвращает данные о заказах/продажах/возвратах из API WB 
     '''
     headers = {"Authorization": api_key, "content-Type": "application/json"}
@@ -171,7 +171,7 @@ async def get_data_from_wb(link_operation_wb: str,
             return upgrade_operations
     return operations
     
-async def get_stocks_from_wb(api_key: str, use_proxy=False) -> List[dict]:
+async def get_stocks_from_wb(api_key: str, use_proxy=False) -> Optional[List[dict]]:
     '''Функция возвращает данные об остатках из API WB 
     '''
     headers = {"Authorization": api_key, "content-Type": "application/json"}
