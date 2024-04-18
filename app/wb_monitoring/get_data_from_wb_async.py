@@ -55,11 +55,13 @@ async def dynamics_operations_on_barcodes(operations: List[dict],
                                           ) -> Dict[str, int]:
     '''Функция обогащает данные об операциях данными о статистике этих самых операций за последие 7 ней + данными об FBS остатках, если селлер работает по такой модели
     '''
+    
     for num, warehouse in enumerate(list_of_warehouses):
         all_warehouse_stocks = await get_all_warehouse_stocks(api_key, warehouse['id'], get_all_barcodes(operations))
+        all_warehouse_stocks = all_warehouse_stocks.get('stocks', {})
         if isinstance(all_warehouse_stocks, dict):
             return {}
-        list_of_warehouses[num]['stocks'] = {item['sku']: item['amount'] for item in all_warehouse_stocks['stocks']}  
+        list_of_warehouses[num]['stocks'] = {item['sku']: item['amount'] for item in all_warehouse_stocks}  
     for o in operations:
         o['stocks_on_warehouses'] = []
         for num, stock_warehouse in enumerate(list_of_warehouses):
@@ -92,11 +94,13 @@ async def get_all_warehouse_stocks(api_key: str,
     '''
     headers = {"Authorization": api_key, "content-Type": "application/json"}
     try:
-        async with httpx.AsyncClient(timeout=240, verify=False) as client:
+        async with httpx.AsyncClient(timeout=240) as client:
             warehouse_stocks = await client.post(settings.warehouses_stocks+'/'+str(warehouseId), headers=headers, json={'skus':barcodes})
         if warehouse_stocks.status_code == 200:
             return warehouse_stocks.json()
-    except:
+    except Exception:
+        import traceback
+        logger.error(traceback.format_exc())
         return {}
     
 
@@ -105,14 +109,15 @@ async def get_all_warehouses(api_key: str) -> Optional[List[dict]]:
     '''
     headers = {"Authorization": api_key, "content-Type": "application/json"}
     try:
-        async with httpx.AsyncClient(timeout=240, verify=False) as client:
+        async with httpx.AsyncClient(timeout=240) as client:
             warehouses = await client.get(settings.warehouses, headers=headers)
         if warehouses.status_code == 200:
             return warehouses.json()
         else:
-            return "error"
-            
-    except:
+            return "error"       
+    except Exception:
+        import traceback
+        logger.error(traceback.format_exc())
         return "error"
         
 async def get_data_from_wb(link_operation_wb: str,
@@ -128,7 +133,9 @@ async def get_data_from_wb(link_operation_wb: str,
     async with httpx.AsyncClient(**data_for_res) as client:
         try:
             wb_data = await client.get(api_url_yestarday, headers=headers)
-        except:
+        except Exception:
+            import traceback
+            logger.error(traceback.format_exc())
             magnifier_count_of_proxie_using(proxie, err=True)
             return {}
     if wb_data.status_code != 200:
@@ -159,7 +166,9 @@ async def get_stocks_from_wb(api_key: str, use_proxy=False) -> Optional[List[dic
     async with httpx.AsyncClient(**data_for_res) as client:
         try:
             stocks = await client.get(api_url_stocks, headers=headers)
-        except:
+        except Exception:
+            import traceback
+            logger.error(traceback.format_exc())
             magnifier_count_of_proxie_using(proxie, err=True)
             return {}
     if stocks.status_code != 200:
@@ -188,6 +197,7 @@ async def sender_messeges_to_telegram(data_for_msg: dict,
         telegram_ids = list(subscription['users'][type_operation]['telegram_ids'].keys())
         for num, tg_user_id in enumerate(telegram_ids):
             is_subscriber = subscription['users'][type_operation]['telegram_ids'][tg_user_id]['is_subscriber']
+            status_sending = None
             async with httpx.AsyncClient(timeout=240) as client:
                 data = await client.get(settings.server_host + f"/api/checksubscribe/get_current_status/{tg_user_id}")
             is_subscriber_db = data.json()
@@ -272,7 +282,9 @@ async def get_feedback_and_rating(nmId: int) -> tuple:
         response = res.json()
         data = response["data"]["products"][0]
         return data["feedbacks"], data["reviewRating"]
-    except:
+    except Exception:
+        import traceback
+        logger.error(traceback.format_exc())
         return "-", "-"
  
 
@@ -311,6 +323,7 @@ async def parsing_order_data(orders_from_wb: List[List[dict]],
                     feedbacks, reviewRating = await get_feedback_and_rating(order["nmId"])
                     img_link = await generic_link_for_nmId_img(order["nmId"])
                     stocks_on_warehouses = order.get('stocks_on_warehouses', [])
+                    logger.info(f'В ф-ции parsing_order_data. Передан subscription => {subscription} ||| order = {order} ||| stocks_on_warehouses = {stocks_on_warehouses}')
                     in_way_to_client = 0
                     in_way_from_client = 0
                     if isinstance(stocks, list):
