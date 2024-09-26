@@ -64,15 +64,18 @@ async def dynamics_operations_on_barcodes(operations: List[dict],
         list_of_warehouses[num]['stocks'] = {item['sku']: item['amount'] for item in all_warehouse_stocks}  
     for o in operations:
         o['stocks_on_warehouses'] = []
-        for num, stock_warehouse in enumerate(list_of_warehouses):
-            on_count_days = stock_warehouse['stocks'][o['barcode']] / o["count_of_operations"]
-            on_count_days_floor = math.floor(on_count_days) if on_count_days > 1 else 0
-            o['stocks_on_warehouses'].append({"warehouse_name": stock_warehouse['name'],
-                                              "stock": stock_warehouse['stocks'][o['barcode']],
-                                              "on_count_days": on_count_days_floor
-                                             })
-            
-        o['total_stocks_on_warehouses'] = sum([_["stock"] for _ in o['stocks_on_warehouses']])
+        try:
+            for num, stock_warehouse in enumerate(list_of_warehouses):
+                on_count_days = stock_warehouse['stocks'][o['barcode']] / o["count_of_operations"]
+                on_count_days_floor = math.floor(on_count_days) if on_count_days > 1 else 0
+                o['stocks_on_warehouses'].append({"warehouse_name": stock_warehouse['name'],
+                                                  "stock": stock_warehouse['stocks'][o['barcode']],
+                                                  "on_count_days": on_count_days_floor
+                                                 })
+                
+            o['total_stocks_on_warehouses'] = sum([_["stock"] for _ in o['stocks_on_warehouses']])
+        except KeyError:
+            continue
     return operations
 
 def operations_sorter(operations: List[dict]) -> List[dict]:
