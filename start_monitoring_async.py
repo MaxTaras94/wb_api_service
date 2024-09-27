@@ -21,6 +21,8 @@ from typing import Optional, List, Tuple
 import time
 
 COUNT_TRY = 4 #количество попыток получить ответ на запрос
+BATCH_SIZE = 100 #количество одновременно обрабатываемых запросов 
+
 
 async def is_checking_subscription() -> Optional[bool]:
     '''Функция возвращает из БД False, если проверка подписки не активна, иначе вернёт True
@@ -139,12 +141,14 @@ async def check_operations() -> None:
         else:
             stocks_wb = await try_to_get_stocks(subscription['api_key'], use_proxy=True)
             tasks.extend(create_task_list(stocks_wb, subscription))
-    await asyncio.gather(*tasks, return_exceptions=True)
+    for i in range(0, len(tasks), BATCH_SIZE):
+        batch = tasks[i:i + BATCH_SIZE]
+        await asyncio.gather(*batch, return_exceptions=True)
 
 if __name__ == "__main__":
     try:
         scheduler = AsyncIOScheduler()
-        scheduler.add_job(check_operations, 'interval', minutes=2)
+        scheduler.add_job(check_operations, 'interval', minutes=30)
         scheduler.start()
     except Exception:
         import traceback
