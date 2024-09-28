@@ -28,7 +28,7 @@ async def is_checking_subscription() -> Optional[bool]:
     '''Функция возвращает из БД False, если проверка подписки не активна, иначе вернёт True
     '''
     try:
-        async with httpx.AsyncClient(timeout=20, verify=False) as client:
+        async with httpx.AsyncClient(timeout=80, verify=False) as client:
             check_subscription = await client.get(settings.server_host+"/api/botsettings/get_status_check_subscription/")
         data =  check_subscription.json()
         return data['is_checking']
@@ -70,7 +70,7 @@ async def try_to_get_data_from_wb(url_for_req: str,
 async def get_subscribers(checking_subscription: bool) -> Tuple[OperationRegroupedDataResponse]:
     '''Функция возвращает список словарей пользователей, подписанных на получение уведомлений
     '''
-    async with httpx.AsyncClient(timeout=20, verify=False) as client:     
+    async with httpx.AsyncClient(timeout=80, verify=False) as client:     
         response = await client.post(f"{settings.server_host}/api/monitoring/get_data_new/", json={'operations': [1,2,3], 
                                                                                                    'is_checking_subscription': checking_subscription
                                                                                                    }
